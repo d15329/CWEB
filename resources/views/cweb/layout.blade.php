@@ -243,6 +243,43 @@ textarea::placeholder {
     {{-- 🔹 本文 --}}
     <main class="cweb-main">
         @yield('content')
+            <div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
+
+    <div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
+        <div class="header">完了</div>
+        <div class="content" style="text-align:center; font-size:16px; padding:20px;">
+            登録しました
+        </div>
+        <div class="actions" style="text-align:center;">
+            <button type="button" class="ui blue button" onclick="closeSuccessModal()">OK</button>
+        </div>
+    </div>
+
+    <!-- <script>
+        function showSuccessModal() {
+            const overlay = document.getElementById('success-modal-overlay');
+            const modal   = document.getElementById('success-modal');
+
+            if (!overlay || !modal) return;
+
+            overlay.classList.add('visible');
+            modal.classList.add('visible');
+
+            setTimeout(() => {
+                closeSuccessModal();
+            }, 2000);
+        }
+
+        function closeSuccessModal() {
+            const overlay = document.getElementById('success-modal-overlay');
+            const modal   = document.getElementById('success-modal');
+
+            if (!overlay || !modal) return;
+
+            overlay.classList.remove('visible');
+            modal.classList.remove('visible');
+        }
+    </script> -->
     </main>
 
 </body>

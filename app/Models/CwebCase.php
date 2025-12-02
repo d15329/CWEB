@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class CwebCase extends Model
 {
     protected $fillable = [
-        'management_no',
+        'manage_no',
         'status',
         'customer_name',
         'sales_contact_employee_number',
@@ -81,9 +81,9 @@ class CwebCase extends Model
     {
         $prefix = 'SP-25'; // とりあえず固定（将来、年から動的生成でもOK）
 
-        $max = static::where('management_no', 'like', $prefix.'%')
-            ->orderBy('management_no', 'desc')
-            ->value('management_no');
+        $max = static::where('manage_no', 'like', $prefix.'%')
+            ->orderBy('manage_no', 'desc')
+            ->value('manage_no');
 
         if (!$max) {
             return $prefix.'0001';
@@ -94,6 +94,20 @@ class CwebCase extends Model
         $numberPart++;
 
         return sprintf('%s%04d', $prefix, $numberPart);
+
+                $lastManageNo = self::orderBy('id', 'desc')->value('manage_no');
+
+        if (!$lastManageNo || !preg_match('/SP-(\d{6})/', $lastManageNo, $m)) {
+            // まだ1件もない or フォーマット外 → 初期値
+            $nextNumber = 250001;
+        } else {
+            // 数値部分を取り出して +1
+            $nextNumber = (int)$m[1] + 1;
+        }
+
+        // ゼロ埋め6桁で SP-xxxxxx を返す
+        return 'SP-' . sprintf('%06d', $nextNumber);
+    
     }
 }
 
