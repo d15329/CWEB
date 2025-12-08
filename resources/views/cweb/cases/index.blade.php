@@ -16,18 +16,12 @@
 <div class="cweb-header-right">
     <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
 
-    {{-- 言語トグル --}}
+    {{-- 言語トグル：日本語 / EN を 1 つにまとめる --}}
     <div class="cweb-header-lang">
         <button type="button"
-                class="cweb-header-lang-toggle is-active"
-                data-lang="ja">
-            日本語
-        </button>
-        <span class="cweb-header-lang-divider">/</span>
-        <button type="button"
                 class="cweb-header-lang-toggle"
-                data-lang="en">
-            EN
+                data-lang="ja-en">
+            日本語 / EN
         </button>
     </div>
 
@@ -173,6 +167,8 @@ document.addEventListener('click', function (e) {
     }
 });
 
+
+
 </script>
 @endsection
 
@@ -185,7 +181,12 @@ document.addEventListener('click', function (e) {
 
 {{-- タブ切り替え --}}
 @php
-    $tab = $tab ?? 'all';
+    // コントローラから渡ってきた tab を前提にタイトルを切り替え
+    $pageTitle = match ($tab ?? 'all') {
+        'mine'    => 'あなたが関わる案件',
+        'product' => '製品ごとの要求内容一覧',
+        default   => 'すべての案件',
+    };
 @endphp
 
 <div class="cweb-tabs">
@@ -223,21 +224,25 @@ document.addEventListener('click', function (e) {
                       border:1px solid #9ca3af;
                       box-sizing:border-box;">
 
-        <button type="submit"
-                style="margin-left:8px;
-                       padding:8px 14px;
-                       border-radius:6px;
-                       border:none;
-                       cursor:pointer;
-                       background:#2563eb;
-                       color:#fff;
-                       font-weight:600;
-                       font-size:13px;">
-            検索
-        </button>
+<button type="submit"
+        style="margin-left:8px;
+               padding:8px 18px;
+               min-width:64px;
+               white-space:nowrap;
+               flex:0 0 auto;
+               border-radius:6px;
+               border:none;
+               cursor:pointer;
+               background:#2563eb;
+               color:#fff;
+               font-weight:600;
+               font-size:13px;">
+    検索
+</button>
     </form>
 
     <button type="button"
+    onclick="openCategoryImage()"
             style="margin-left:16px;
                    padding:8px 14px;
                    border-radius:8px;
@@ -465,7 +470,7 @@ document.addEventListener('click', function (e) {
     <tr>
         {{-- 管理番号 --}}
         <td style="padding:6px 10px;color:#2563eb;font-weight:700;text-align:center;">
-            <a href="#"
+            <a href="{{ route('cweb.cases.show', ['case' => $case->id]) }}"
                style="color:#2563eb;text-decoration:none;">
                 {{ $case->manage_no }}
             </a>
@@ -595,15 +600,55 @@ document.addEventListener('click', function (e) {
     </div>
 @endif
 
+{{-- 完了ポップアップ（メインページ用） --}}
 <div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
 
-<div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
-    <div class="header">完了</div>
-    <div class="content" style="text-align:center; font-size:16px; padding:20px;">
+<div id="success-modal"
+     class="ui small modal"
+     style="
+        display:block;
+        opacity:0;
+        pointer-events:none;
+        max-width:280px;            /* ★ 横幅を小さく */
+        margin:0 auto;              /* 中央寄せ */
+        border-radius:12px;         /* 丸み */
+     ">
+    
+    {{-- ★ ヘッダー（完了）削除済み --}}
+    
+    <div class="content"
+         style="
+            text-align:center;
+            font-size:15px;
+            padding:20px 16px;
+            border-bottom:none;     /* ★ 仕切り線削除 */
+         ">
         {{ session('ok') }}
     </div>
-    <div class="actions" style="text-align:center;">
-        <button type="button" class="ui blue button" onclick="closeSuccessModal()">OK</button>
+
+    <div class="actions"
+         style="
+            text-align:center;
+            padding-bottom:16px;
+            border-top:none;        /* ★ 仕切り線削除 */
+         ">
+
+        {{-- ★ ボタンを緑に統一（今のC-WEBと同じ感じ） --}}
+        <button type="button"
+                class="ui green button"
+                style="
+                    background:#22c55e;   /* 緑（C-WEBのフォルダボタン色） */
+                    color:#fff;
+                    padding:8px 28px;
+                    font-weight:700;
+                    border-radius:999px;
+                    border:none;
+                    box-shadow:0 4px 8px rgba(0,0,0,0.25);
+                "
+                onclick="closeSuccessModal()">
+            OK
+        </button>
+
     </div>
 </div>
 
@@ -730,6 +775,7 @@ document.addEventListener('click', function (e) {
     color: #fff;
 }
 
+/* ▼ 絞り込みメニュー */
 .cweb-filter-wrap {
     position: relative;
     display: inline-flex;
@@ -783,15 +829,14 @@ document.addEventListener('click', function (e) {
     }
 }
 
-
-
+/* ▼ ページネーションを表の外＋中央に */
 .cweb-pagination-wrapper {
     margin-top: 16px;              /* 表との間隔 */
     display: flex;
     justify-content: center;       /* 中央寄せ */
 }
 
-/* ▼ ページネーションを表の外＋中央に */
+/* ▼ ページネーションを表の外＋中央に（重複だが現状維持） */
 .cweb-pagination-wrapper {
     margin-top: 16px;              /* 表との間隔 */
     display: flex;
@@ -866,111 +911,234 @@ document.addEventListener('click', function (e) {
         background: rgba(255,255,255,.06);
     }
 }
-/* ▼ ヘッダーのピル風ボタン共通 */
-.cweb-brand-link,
-.cweb-header-lang-toggle,
-.cweb-header-user-toggle {
-    display: inline-flex;
+
+/* ===========================
+   ▼ ヘッダー（日本語/EN・ユーザー名）
+   =========================== */
+
+/* 右側のまとまり（Q-WEB・言語・ユーザー名） */
+.cweb-header-right {
+    display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 4px 10px;
-    margin-left: 8px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    font-size: 12px;
-    line-height: 1.4;
-    cursor: pointer;
-    text-decoration: none;
-    background: transparent;
-    color: #e5e7eb;
-    transition: background .15s ease, color .15s ease, border-color .15s ease,
-                box-shadow .15s ease, transform .04s ease;
+    gap: 12px;
+    color: #e5e7eb;  /* 文字色は元の薄い明るい色 */
 }
 
-/* 左端の C-WEB だけ margin-left は不要 */
-.cweb-header-left .cweb-brand-link {
-    margin-left: 0;
-}
-
-/* ホバー時：うっすらハイライト */
-.cweb-brand-link:hover,
-.cweb-header-lang-toggle:hover,
-.cweb-header-user-toggle:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(148, 163, 184, 0.6);
-}
-
-/* クリックした瞬間の縮み感 */
-.cweb-brand-link:active,
-.cweb-header-lang-toggle:active,
-.cweb-header-user-toggle:active {
-    transform: scale(0.96);
-}
-
-/* 選択（is-active）状態：色をハッキリ */
-.cweb-brand-link.is-active,
-.cweb-header-lang-toggle.is-active,
-.cweb-header-user-toggle.is-active {
-    background: #f9fafb;
-    color: #111827;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 1px rgba(37, 99, 235, .25);
-}
-
-/* C-WEB ブランドだけ、少し強めに */
-.cweb-brand-link.is-active {
-    font-weight: 700;
-}
-
-/* 言語トグルの配置 */
+/* 言語ブロック（「日本語 / EN」） */
 .cweb-header-lang {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    margin-left: 12px;
+    margin-left: 8px;
+    padding-left: 12px;  /* 左端の縦線ぶんスペース */
 }
 
-.cweb-header-lang-divider {
-    margin: 0 4px;
-    color: #9ca3af;
-    font-size: 11px;
+/* 言語ブロック左に、ヘッダー帯を縦に割る線を引く */
+.cweb-header-lang::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;     /* 少し上下にはみ出させて「がっつり」見せる */
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* 日本語 / EN ボタン（1つにまとめたもの） */
+.cweb-header-lang-toggle {
+    position: relative;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1.4;
+    transition:
+        color .15s ease,
+        transform .04s ease;
 }
 
 /* ユーザー名ボタン */
 .cweb-header-user-toggle {
-    margin-left: 16px;
+    position: relative;
+    margin-left: 8px;
+    padding-left: 12px;  /* 左端の縦線ぶんスペース */
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1.4;
+    transition:
+        color .15s ease,
+        transform .04s ease;
 }
 
-/* ダークモード対応 */
+/* ユーザー名の左にも、ヘッダー帯を縦に割る線 */
+.cweb-header-user-toggle::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* ホバー時：少しだけ明るく */
+.cweb-header-lang-toggle:hover,
+.cweb-header-user-toggle:hover {
+    color: #ffffff;
+}
+
+/* クリック時：ちょっと縮む */
+.cweb-header-lang-toggle:active,
+.cweb-header-user-toggle:active {
+    transform: scale(0.97);
+}
+
+/* ▼ 反射エフェクト（日本語 / EN とユーザー名共通） */
+.cweb-header-lang-toggle::after,
+.cweb-header-user-toggle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+        120deg,
+        transparent,
+        rgba(255, 255, 255, 0.6),
+        transparent
+    );
+    transform: skewX(-20deg);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* JS で付けるクラス：反射アニメーションを起動 */
+.cweb-header-lang-toggle.is-hover-reflect::after,
+.cweb-header-user-toggle.is-hover-reflect::after {
+    animation: cweb-header-reflect 0.6s linear;
+}
+
+@keyframes cweb-header-reflect {
+    0% {
+        left: -120%;
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    100% {
+        left: 130%;
+        opacity: 0;
+    }
+}
+
+/* ===========================
+   ▼ ヘッダー（日本語/EN・ユーザー名）
+   =========================== */
+
+/* 右側のまとまり（Q-WEB・言語・ユーザー名） */
+.cweb-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #e5e7eb;  /* ベースの文字色 */
+}
+
+/* 言語ブロック（「日本語 / EN」） */
+.cweb-header-lang {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding-left: 12px;  /* 左端の縦線ぶんスペース */
+}
+
+/* 言語ブロック左に、ヘッダー帯を縦に割る線を引く */
+.cweb-header-lang::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;     /* 少し上下にはみ出させて「がっつり」見せる */
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* 日本語 / EN ボタン（1つにまとめたもの） */
+.cweb-header-lang-toggle {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1.4;
+    opacity: 0.75;                  /* ちょい薄め */
+    transition:
+        opacity .15s ease,
+        background-color .15s ease,
+        transform .04s ease;
+}
+
+/* ユーザー名ボタン */
+.cweb-header-user-toggle {
+    position: relative;
+    margin-left: 8px;
+    padding-left: 12px;             /* 左端の縦線ぶんスペース */
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1.4;
+    opacity: 0.75;                  /* ちょい薄め */
+    transition:
+        opacity .15s ease,
+        background-color .15s ease,
+        transform .04s ease;
+}
+
+/* ユーザー名の左にも、ヘッダー帯を縦に割る線 */
+.cweb-header-user-toggle::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* ホバー時：色が濃く・少しだけ背景を足す */
+.cweb-header-lang-toggle:hover,
+.cweb-header-user-toggle:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.06);  /* うっすら */
+}
+
+/* クリック時：ちょっと縮む */
+.cweb-header-lang-toggle:active,
+.cweb-header-user-toggle:active {
+    transform: scale(0.97);
+}
+
+/* ダークモード：線を少し濃くするだけで色味はほぼ同じ */
 @media (prefers-color-scheme: dark) {
-    .cweb-brand-link,
-    .cweb-header-lang-toggle,
-    .cweb-header-user-toggle {
+    .cweb-header-right {
         color: #e5e7eb;
     }
-    .cweb-brand-link.is-active,
-    .cweb-header-lang-toggle.is-active,
-    .cweb-header-user-toggle.is-active {
-        background: #e5e7eb;
-        color: #111827;
+    .cweb-header-lang::before,
+    .cweb-header-user-toggle::before {
+        background: rgba(75, 85, 99, 0.8);
     }
 }
-/* C-WEB ロゴだけはピル化しない */
-.cweb-header-left .cweb-brand-link {
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
-    margin-left: 0 !important;
-    border-radius: 0 !important;
-    color: inherit !important;
-    font-weight: 700 !important;
-    font-size: 18px !important;
-    cursor: pointer;
-}
 
-/* ホバー時も余計な背景を付けない */
-.cweb-header-left .cweb-brand-link:hover {
-    background: none !important;
-}
 
 </style>
 

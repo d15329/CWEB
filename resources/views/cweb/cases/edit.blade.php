@@ -9,32 +9,30 @@
                 C-WEB
             </a>
 
-            <!-- 管理番号はそのまま残す場合 -->
+            {{-- 管理番号（編集対象の案件） ※ (登録中) を付与 --}}
             <div style="font-weight:700;margin-left:12px;">
-                {{ $nextManagementNo }}<span style="font-size:13px;margin-left:2px;">(登録中)</span>
+                {{ $case->manage_no }}<span style="font-size:13px;margin-left:2px;">(編集中)</span>
             </div>
         </div>
 
-<div class="cweb-header-right">
-    <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
+        <div class="cweb-header-right">
+            <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
 
-    {{-- 言語トグル（縦線付き・ホバーで少し濃くなるボタン想定） --}}
-    <div class="cweb-header-lang">
-        <button type="button"
-                class="cweb-header-lang-toggle"
-                data-lang="ja-en">
-            日本語 / EN
-        </button>
-    </div>
+            {{-- 日本語 / EN を1つのボタンにしてヘッダー縦線で区切る --}}
+            <div class="cweb-header-lang">
+                <button type="button"
+                        class="cweb-header-lang-toggle"
+                        data-lang="ja-en">
+                    日本語 / EN
+                </button>
+            </div>
 
-    {{-- ユーザー名＋（編集中）タグ --}}
-    @auth
-        <button type="button" class="cweb-header-user-toggle">
-            {{ auth()->user()->name }}
-
-        </button>
-    @endauth
-</div>
+            @auth
+                <button type="button" class="cweb-header-user-toggle">
+                    {{ auth()->user()->name }}
+                </button>
+            @endauth
+        </div>
 
     </div>
 </header>
@@ -43,15 +41,6 @@
 @section('content')
 
 <style>
-
-    /* ヘッダーの「（編集中）」タグ */
-.cweb-header-editing-tag{
-    margin-left: 6px;
-    font-size: 11px;
-    opacity: 0.85;
-    color: #fbbf24; /* 少し目立つ黄色系。気に入らなければここだけ変えてOK */
-}
-
 /* Will分配の名前表示を必ず var(--text) で */
 [id^="will-emp-display-"] {
     color: var(--text) !important;
@@ -599,56 +588,190 @@
         font-size:12px;
         cursor:pointer;
     }
+
+    /* ===========================
+   ▼ ヘッダー（日本語/EN・ユーザー名）
+   =========================== */
+
+/* 右側のまとまり（Q-WEB・言語・ユーザー名） */
+.cweb-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #e5e7eb;  /* ヘッダー右側文字色 */
+}
+
+/* 言語ブロック（「日本語 / EN」） */
+.cweb-header-lang {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding-left: 12px;  /* 左に縦線ぶんの余白 */
+}
+
+/* 言語ブロック左に、ヘッダー帯を縦に割る線を入れる */
+.cweb-header-lang::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;     /* 上下にはみ出させて「がっつり」見せる */
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* 日本語 / EN ボタン */
+.cweb-header-lang-toggle {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1.4;
+    opacity: 0.75;                  /* ちょい薄め */
+    transition:
+        opacity .15s ease,
+        background-color .15s ease,
+        transform .04s ease;
+}
+
+/* ユーザー名ボタン */
+.cweb-header-user-toggle {
+    position: relative;
+    margin-left: 8px;
+    padding-left: 12px;             /* 左に縦線ぶんの余白 */
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1.4;
+    opacity: 0.75;
+    transition:
+        opacity .15s ease,
+        background-color .15s ease,
+        transform .04s ease;
+}
+
+/* ユーザー名の左にも縦線 */
+.cweb-header-user-toggle::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* ホバー時：少し濃く & ほんのり背景 */
+.cweb-header-lang-toggle:hover,
+.cweb-header-user-toggle:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* クリック時：ちょっとだけ縮む */
+.cweb-header-lang-toggle:active,
+.cweb-header-user-toggle:active {
+    transform: scale(0.97);
+}
+
+/* ダークモード調整 */
+@media (prefers-color-scheme: dark) {
+    .cweb-header-right {
+        color: #e5e7eb;
+    }
+    .cweb-header-lang::before,
+    .cweb-header-user-toggle::before {
+        background: rgba(75, 85, 99, 0.8);
+    }
+}
+
 </style>
 
 
-    <form method="POST" action="{{ route('cweb.cases.store') }}">
-        @csrf
-
-        {{-- 登録ボタン（スクロールしても上に固定） --}}
-        <div class="cweb-submit-bar">
-            <button type="submit"
-                    class="btn btn-accent cweb-submit-button">
-                登録
-            </button>
-        </div>
-
-        {{-- 1列11行テーブル --}}
-        <div style="margin-top:60px;background:#0b1029;border-radius:8px;padding:0;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
 @php
+    // ▼ 営業窓口（社員番号 + 名前）
+    $salesEmployeeNumber = $case->sales_contact_employee_number ?? null;
+    $salesEmployeeName   = optional(
+        \App\Models\User::where('employee_number', $salesEmployeeNumber)->first()
+    )->name;
+
+    // ▼ 情報共有者（sharedUsers リレーションから role=shared のみ）
+    $sharedUsers = collect($case->sharedUsers ?? [])
+        ->filter(fn($row) => ($row->role ?? null) === 'shared')
+        ->values();
+
+    // ▼ PCN / その他要求 / Will 分配
+    $pcnItems        = collect($case->pcnItems ?? []);
+    $otherReqs       = collect($case->otherRequirements ?? []);
+    $willAllocations = collect($case->willAllocations ?? []);
+
+    // ▼ その他要求対応者用：社員番号 → User マップ
+    $otherEmpNumbers = $otherReqs->pluck('responsible_employee_number')
+                                 ->filter()
+                                 ->unique()
+                                 ->values()
+                                 ->all();
+    $otherEmployees = $otherEmpNumbers
+        ? \App\Models\User::whereIn('employee_number', $otherEmpNumbers)->get()->keyBy('employee_number')
+        : collect();
+
+    // ▼ カテゴリー（チェックON状態の初期値）
+    $defaultCategories = [];
+    if ($case->category_standard ?? false) $defaultCategories[] = 'standard';
+    if ($case->category_pcn ?? false)      $defaultCategories[] = 'pcn';
+    if ($case->category_other ?? false)    $defaultCategories[] = 'other';
+@endphp
+
+<form method="POST" action="{{ route('cweb.cases.update', $case) }}">
+    @csrf
+    @method('PUT')
+
+    {{-- 更新ボタン（スクロールしても上に固定） --}}
+    <div class="cweb-submit-bar">
+        <button type="submit"
+                class="btn btn-accent cweb-submit-button">
+            更新
+        </button>
+    </div>
+
+@php
+    // 1列目・2列目のセル共通スタイル
     $rowStyle = '';
 
-    // 1列目：幅半分（10%）、真ん中寄せ、左に空白、仕切りはグレー
-        $labelCell = implode('', [
-            'padding:10px 10px 10px 32px;',
-            'width:18%;',
-            'vertical-align:middle;',
-            'color:#000;',
-            'background:#e5e7eb;',
-            'border-right:1px solid #d1d5db;',
-            'border-bottom:1px solid #e5e7eb;',     // ← ★ここを none にする
-            'box-sizing:border-box;',
-            'font-weight:700;',
-        ]);
+    $labelCell = implode('', [
+        'padding:10px 10px 10px 32px;',
+        'width:18%;',
+        'vertical-align:middle;',
+        'color:#000;',
+        'background:#e5e7eb;',
+        'border-right:1px solid #d1d5db;',
+        'border-bottom:none;',
+        'box-sizing:border-box;',
+        'font-weight:700;',
+    ]);
 
-
-    // 2列目：ボディ背景と同じ色、下線なし、縦方向も中央寄せ
     $inputCell = 'padding:10px 10px;background:var(--bg);border-bottom:none;vertical-align:middle;';
 @endphp
 
+    {{-- 本体テーブル --}}
+    <div style="margin-top:60px;background:#0b1029;border-radius:8px;padding:0;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
 
-
-{{-- 1行目：営業窓口（必須） --}}
-<tr style="{{ $rowStyle }}">
-    <td style="{{ $labelCell }}">
-        <span style="color:red;">＊</span>営業窓口
-    </td>
-    <td style="{{ $inputCell }}">
+            {{-- 1行目：営業窓口（必須） --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">
+                    <span style="color:red;">＊</span>営業窓口
+                </td>
+                <td style="{{ $inputCell }}">
 
 @php
-    $salesNo   = old('sales_employee_number');
-    $salesName = old('sales_employee_name');
+    $salesNo   = old('sales_employee_number', $salesEmployeeNumber);
+    $salesName = old('sales_employee_name', $salesEmployeeName);
 @endphp
 
 <span id="sales-emp-display"
@@ -658,72 +781,82 @@
     @endif
 </span>
 
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 
-            {{-- 保存用フィールド --}}
-            <input type="hidden"
-                   name="sales_employee_number"
-                   id="sales-emp-no"
-                   value="{{ old('sales_employee_number') }}">
-            <input type="hidden"
-                   name="sales_employee_name"
-                   id="sales-emp-name"
-                   value="{{ old('sales_employee_name') }}">
+                        {{-- 保存用フィールド --}}
+                        <input type="hidden"
+                               name="sales_employee_number"
+                               id="sales-emp-no"
+                               value="{{ $salesNo }}">
+                        <input type="hidden"
+                               name="sales_employee_name"
+                               id="sales-emp-name"
+                               value="{{ $salesName }}">
 
-            <!-- {{-- ▼ 選択済みの表示（未選択なら完全に非表示＝幅0） --}}
-            <span id="sales-emp-display"
-                  style="display:{{ $salesName ? 'inline-block' : 'none' }};color:var(--text);font-weight:700;">
-                {{ $salesName }}
-            </span> -->
+                        {{-- 選択ボタン --}}
+                        <button type="button"
+                                class="btn"
+                                style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
+                                onclick="openPopupA()">
+                            選択
+                        </button>
+                    </div>
 
-            {{-- ▼ 選択ボタン（最初は左端にぴったり） --}}
-            <button type="button"
-                    class="btn"
-                    style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
-                    onclick="openPopupA()">
-                選択
-            </button>
-        </div>
-
-        @error('sales_employee_number')
-            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-        @enderror
-    </td>
-</tr>
-
+                    @error('sales_employee_number')
+                        <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                </td>
+            </tr>
 
 {{-- 2行目：情報共有者 --}}
 <tr style="{{ $rowStyle }}">
     <td style="{{ $labelCell }}">情報共有者</td>
     <td style="{{ $inputCell }}">
 
-        @php
-            $oldSharedNos    = (array)old('shared_employee_numbers', []);
-            $oldSharedLabels = (array)old('shared_employee_labels', []);
-        @endphp
-
-        {{-- hidden保持 --}}
+        {{-- hidden（社員番号） --}}
         <div id="shared-hidden-container">
-            @foreach($oldSharedNos as $i => $empNo)
-                <input type="hidden"
-                       name="shared_employee_numbers[]"
-                       value="{{ $empNo }}">
-                <input type="hidden"
-                       name="shared_employee_labels[]"
-                       value="{{ $oldSharedLabels[$i] ?? '' }}">
+            @php
+                // old() に値があればそちら優先
+                $oldSharedNos = (array)old('shared_employee_numbers', []);
+
+                if (!empty($oldSharedNos)) {
+                    $sharedForDisplay = \App\Models\User::whereIn('employee_number', $oldSharedNos)
+                        ->get()
+                        ->keyBy('employee_number');
+                } else {
+                    // 初回表示：案件に紐づく sharedUsers から
+                    $sharedForDisplay = $sharedUsers
+                        ->map(function($row){
+                            return $row->user;
+                        })
+                        ->filter()
+                        ->keyBy('employee_number');
+                    $oldSharedNos = $sharedForDisplay->keys()->all();
+                }
+            @endphp
+
+            @foreach($oldSharedNos as $empNo)
+                <input type="hidden" name="shared_employee_numbers[]" value="{{ $empNo }}">
             @endforeach
         </div>
 
-        {{-- 画面表示：営業窓口と同じテイスト（番号 / 氏名） --}}
-        <div id="shared-display" style="margin-bottom:4px;">
-            @foreach($oldSharedNos as $i => $empNo)
-                @php $label = $oldSharedLabels[$i] ?? ''; @endphp
-                @if($empNo || $label)
-                    <div style="color:var(--text);font-weight:700;">
-                        {{ $empNo }}@if($label) / {{ $label }} @endif
-                    </div>
-                @endif
-            @endforeach
+        {{-- 表示用：社員番号 / 名前 を「、」区切り --}}
+        <div id="shared-display" style="margin-bottom:4px;color:var(--text);font-size:13px;">
+            @if(empty($oldSharedNos))
+                -
+            @else
+                @php $first = true; @endphp
+                @foreach($oldSharedNos as $empNo)
+                    @php $u = $sharedForDisplay[$empNo] ?? null; @endphp
+                    @if(!$first) 、@endif
+                    @php $first = false; @endphp
+                    @if($u)
+                        {{ $u->employee_number }} / {{ $u->name }}
+                    @else
+                        {{ $empNo }}
+                    @endif
+                @endforeach
+            @endif
         </div>
 
         <button type="button"
@@ -739,410 +872,433 @@
     </td>
 </tr>
 
-{{-- 3行目：費用負担先（必須） --}}
-<tr style="{{ $rowStyle }}">
-    <td style="{{ $labelCell }}">
-        <span style="color:red;">＊</span>費用負担先
-    </td>
-    <td style="{{ $inputCell }}">
+            {{-- 3行目：費用負担先（必須） --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">
+                    <span style="color:red;">＊</span>費用負担先
+                </td>
+                <td style="{{ $inputCell }}">
 
-        @php
-            $costOwnerName = old('cost_owner_name');
-        @endphp
+@php
+    // DBから来たコード・名前
+    $costOwnerCode = old('cost_owner_code', $case->cost_responsible_code);
+    $costOwnerName = old('cost_owner_name', $case->cost_responsible_name ?? null);
 
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-
-            {{-- 保存用フィールド --}}
-            <input type="hidden"
-                   name="cost_owner_code"
-                   id="cost-owner-code"
-                   value="{{ old('cost_owner_code') }}">
-            <input type="hidden"
-                   name="cost_owner_name"
-                   id="cost-owner-name"
-                   value="{{ old('cost_owner_name') }}">
-
-            {{-- ▼ 選択済みの表示（未選択なら完全に非表示＝幅0になる） --}}
-            <span id="cost-owner-display"
-                  style="display:{{ $costOwnerName ? 'inline-block' : 'none' }};color:var(--text);font-weight:700;">
-                {{ $costOwnerName }}
-            </span>
-
-            {{-- ▼ 選択ボタン（最初は左端にぴったり） --}}
-            <button type="button"
-                    class="btn"
-                    style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
-                    onclick="openPopupC()">
-                選択
-            </button>
-        </div>
-
-        @error('cost_owner_code')
-            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-        @enderror
-    </td>
-</tr>
+    // 表示用ラベル作成
+    if ($costOwnerCode && $costOwnerName) {
+        $costOwnerLabel = $costOwnerCode . ' / ' . $costOwnerName;
+    } else {
+        $costOwnerLabel = $costOwnerCode;   // コードのみ
+    }
+@endphp
 
 
-                {{-- 4行目：顧客名（必須） --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">
-                        <span style="color:red;">＊</span>顧客名
-                    </td>
-                    <td style="{{ $inputCell }}">
-                        <input type="text"
-                               name="customer_name"
-                               value="{{ old('customer_name') }}"
-                               style="width:220px;padding:6px 8px;border-radius:4px;border:1px solid #9ca3af;">
-                        @error('customer_name')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                    </td>
-                </tr>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 
-                {{-- 5行目：カテゴリー（必須・複数可） --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">
-                        <span style="color:red;">＊</span>カテゴリー
-                    </td>
-                    <td style="{{ $inputCell }}">
-                        @php
-                            $oldCategories = (array)old('categories', []);
-                        @endphp
-                        <label style="color:var(--text);">
-                            <input type="checkbox" name="categories[]" value="standard"
-                                   {{ in_array('standard', $oldCategories, true) ? 'checked' : '' }}>
-                            標準管理
-                        </label>
-                        <label style="margin-left:12px;color:var(--text);">
-                            <input type="checkbox" name="categories[]" value="pcn"
-                                   {{ in_array('pcn', $oldCategories, true) ? 'checked' : '' }}>
-                            PCN
-                        </label>
-                        <label style="margin-left:12px;ccolor:var(--text);">
-                            <input type="checkbox" name="categories[]" value="other"
-                                   {{ in_array('other', $oldCategories, true) ? 'checked' : '' }}>
-                            その他要求
-                        </label>
+<input type="hidden" name="cost_owner_code" id="cost-owner-code" value="{{ $costOwnerCode }}">
+<input type="hidden" name="cost_owner_name" id="cost-owner-name" value="{{ $costOwnerName }}">
 
-                        @error('categories')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                    </td>
-                </tr>
 
-                {{-- 6行目：対象製品（必須・プルダウン2つ） --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">
-                        <span style="color:red;">＊</span>対象製品
-                    </td>
-                    <td style="{{ $inputCell }}">
-                        @php
-                            $oldMain = old('product_main', '');
-                            $oldSub  = old('product_sub', '');
-                        @endphp
+<span id="cost-owner-display"
+      style="display:{{ $costOwnerCode ? 'inline-block' : 'none' }};font-weight:700;color:var(--text);">
+    {{ $costOwnerLabel }}
+</span>
 
-                        <select name="product_main"
-                                id="product-main"
-                                style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                            <option value="" {{ $oldMain === '' ? 'selected' : '' }} style="color:#9ca3af;">
-                                選択
-                            </option>
-                            <option value="HogoMax-内製品"   {{ $oldMain === 'HogoMax-内製品' ? 'selected' : '' }}>HogoMax-内製品</option>
-                            <option value="HogoMax-OEM品"    {{ $oldMain === 'HogoMax-OEM品' ? 'selected' : '' }}>HogoMax-OEM品</option>
-                            <option value="StayClean-内製品" {{ $oldMain === 'StayClean-内製品' ? 'selected' : '' }}>StayClean-内製品</option>
-                            <option value="StayClean-OEM品"  {{ $oldMain === 'StayClean-OEM品' ? 'selected' : '' }}>StayClean-OEM品</option>
-                            <option value="ResiFlat-内製品"   {{ $oldMain === 'ResiFlat-内製品' ? 'selected' : '' }}>ResiFlat-内製品</option>
-                            <option value="その他"           {{ $oldMain === 'その他' ? 'selected' : '' }}>その他</option>
-                        </select>
 
-                        <select name="product_sub"
-                                id="product-sub"
-                                style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;margin-left:8px;">
-                            <option value="" {{ $oldSub === '' ? 'selected' : '' }} style="color:#9ca3af;">
-                                選択
-                            </option>
-                            {{-- JSで候補差し込み --}}
-                        </select>
+                        <button type="button"
+                                class="btn"
+                                style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
+                                onclick="openPopupC()">
+                            選択
+                        </button>
+                    </div>
 
-                        @error('product_main')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                        @error('product_sub')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                    </td>
-                </tr>
+                    @error('cost_owner_code')
+                        <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                </td>
+            </tr>
 
-                {{-- 7行目：PCN管理項目 --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">PCN管理項目</td>
-                    <td style="{{ $inputCell }}">
-                        <div id="pcn-rows">
+            {{-- 4行目：顧客名（必須） --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">
+                    <span style="color:red;">＊</span>顧客名
+                </td>
+                <td style="{{ $inputCell }}">
+                    <input type="text"
+                           name="customer_name"
+                           value="{{ old('customer_name', $case->customer_name) }}"
+                           style="width:220px;padding:6px 8px;border-radius:4px;border:1px solid #9ca3af;">
+                    @error('customer_name')
+                        <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                </td>
+            </tr>
+
+            {{-- 5行目：カテゴリー（必須・複数可） --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">
+                    <span style="color:red;">＊</span>カテゴリー
+                </td>
+                <td style="{{ $inputCell }}">
+@php
+    $oldCategories = (array)old('categories', $defaultCategories);
+@endphp
+                    <label style="color:var(--text);">
+                        <input type="checkbox" name="categories[]" value="standard"
+                            {{ in_array('standard', $oldCategories, true) ? 'checked' : '' }}>
+                        標準管理
+                    </label>
+                    <label style="margin-left:12px;color:var(--text);">
+                        <input type="checkbox" name="categories[]" value="pcn"
+                            {{ in_array('pcn', $oldCategories, true) ? 'checked' : '' }}>
+                        PCN
+                    </label>
+                    <label style="margin-left:12px;color:var(--text);">
+                        <input type="checkbox" name="categories[]" value="other"
+                            {{ in_array('other', $oldCategories, true) ? 'checked' : '' }}>
+                        その他要求
+                    </label>
+
+                    @error('categories')
+                        <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                </td>
+            </tr>
+
+            {{-- 6行目：対象製品（必須・プルダウン2つ） --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">
+                    <span style="color:red;">＊</span>対象製品
+                </td>
+                <td style="{{ $inputCell }}">
+@php
+    $oldMain = old('product_main', $case->product_group);
+    $oldSub  = old('product_sub',  $case->product_code);
+@endphp
+
+                    <select name="product_main"
+                            id="product-main"
+                            style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                        <option value="" {{ $oldMain === '' ? 'selected' : '' }} style="color:#9ca3af;">選択</option>
+                        <option value="HogoMax-内製品"   {{ $oldMain === 'HogoMax-内製品' ? 'selected' : '' }}>HogoMax-内製品</option>
+                        <option value="HogoMax-OEM品"    {{ $oldMain === 'HogoMax-OEM品' ? 'selected' : '' }}>HogoMax-OEM品</option>
+                        <option value="StayClean-内製品" {{ $oldMain === 'StayClean-内製品' ? 'selected' : '' }}>StayClean-内製品</option>
+                        <option value="StayClean-OEM品"  {{ $oldMain === 'StayClean-OEM品' ? 'selected' : '' }}>StayClean-OEM品</option>
+                        <option value="ResiFlat-内製品"   {{ $oldMain === 'ResiFlat-内製品' ? 'selected' : '' }}>ResiFlat-内製品</option>
+                        <option value="その他"           {{ $oldMain === 'その他' ? 'selected' : '' }}>その他</option>
+                    </select>
+
+                    <select name="product_sub"
+                            id="product-sub"
+                            style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;margin-left:8px;">
+                        <option value="" style="color:#9ca3af;">選択</option>
+                        {{-- JSで候補差し込み（create と同じ） --}}
+                    </select>
+
+                    @error('product_main')
+                        <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                    @error('product_sub')
+                        <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+                    @enderror
+                </td>
+            </tr>
+
+            {{-- 7行目：PCN管理項目 --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">PCN管理項目</td>
+                <td style="{{ $inputCell }}">
+                    <div id="pcn-rows">
+@php
+    $pcnOld = old('pcn_items');
+
+    if (is_null($pcnOld)) {
+        $pcnOld = $pcnItems->map(function ($item) {
+            return [
+                'category'      => $item->category,
+                'title'         => $item->title,
+                'months_before' => $item->months_before,
+            ];
+        })->toArray();
+
+        if (empty($pcnOld)) {
+            $pcnOld = [
+                ['category' => null, 'title' => null, 'months_before' => null],
+            ];
+        }
+    }
+@endphp
+
+                        @foreach($pcnOld as $i => $item)
+                            <div class="pcn-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+                                <select name="pcn_items[{{ $i }}][category]"
+                                        style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                                    <option value="">選択</option>
+                                    <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>仕様書内容</option>
+                                    <option value="man"         {{ ($item['category'] ?? '') === 'man' ? 'selected' : '' }}>人（Man）</option>
+                                    <option value="machine"     {{ ($item['category'] ?? '') === 'machine' ? 'selected' : '' }}>機械（Machine）</option>
+                                    <option value="material"    {{ ($item['category'] ?? '') === 'material' ? 'selected' : '' }}>材料（Material）</option>
+                                    <option value="method"      {{ ($item['category'] ?? '') === 'method' ? 'selected' : '' }}>方法（Method）</option>
+                                    <option value="measurement" {{ ($item['category'] ?? '') === 'measurement' ? 'selected' : '' }}>測定（Measurement）</option>
+                                    <option value="environment" {{ ($item['category'] ?? '') === 'environment' ? 'selected' : '' }}>環境（Environment）</option>
+                                    <option value="other"       {{ ($item['category'] ?? '') === 'other' ? 'selected' : '' }}>その他</option>
+                                </select>
+
+                                <input type="text"
+                                       name="pcn_items[{{ $i }}][title]"
+                                       value="{{ $item['title'] ?? '' }}"
+                                       placeholder="ラベル変更など"
+                                       style="width:200px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+
+                                <input type="number"
+                                       name="pcn_items[{{ $i }}][months_before]"
+                                       value="{{ $item['months_before'] ?? '' }}"
+                                       min="0"
+                                       style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                                <span style="color:var(--text);">ヵ月前連絡</span>
+
+                                <button type="button"
+                                        onclick="removePcnRow(this)"
+                                        style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
+                                    削除
+                                </button>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <button type="button"
+                            onclick="addPcnRow()"
+                            style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
+                        ＋ 行追加
+                    </button>
+                </td>
+            </tr>
+
+            {{-- 8行目：その他要求 --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">その他要求</td>
+                <td style="{{ $inputCell }}">
+                    <div id="other-rows">
+@php
+    $otherOld = old('other_requirements');
+
+    if (is_null($otherOld)) {
+        $otherOld = $otherReqs->map(function ($req) use ($otherEmployees) {
+            $empNo = $req->responsible_employee_number ?? null;
+            $emp   = $empNo ? ($otherEmployees[$empNo] ?? null) : null;
+            $label = $empNo && $emp ? ($empNo.' / '.$emp->name) : ($empNo ?? '');
+
+            return [
+                'content'                    => $req->content,
+                'responsible_employee_number'=> $empNo,
+                'responsible_label'          => $label,
+            ];
+        })->toArray();
+
+        if (empty($otherOld)) {
+            $otherOld = [
+                ['content' => null, 'responsible_employee_number' => null, 'responsible_label' => null],
+            ];
+        }
+    }
+@endphp
+
+                        @foreach($otherOld as $i => $row)
                             @php
-                                $pcnOld = old('pcn_items', [
-                                    ['category' => null, 'title' => null, 'months_before' => null],
-                                ]);
+                                $respLabel = $row['responsible_label'] ?? '';
                             @endphp
 
-                            @foreach($pcnOld as $i => $item)
-                                <div class="pcn-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-                                    <select name="pcn_items[{{ $i }}][category]"
-                                            style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                                        <option value="">選択</option>
-                                        <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>仕様書内容</option>
-                                        <option value="man"         {{ ($item['category'] ?? '') === 'man' ? 'selected' : '' }}>人（Man）</option>
-                                        <option value="machine"     {{ ($item['category'] ?? '') === 'machine' ? 'selected' : '' }}>機械（Machine）</option>
-                                        <option value="material"    {{ ($item['category'] ?? '') === 'material' ? 'selected' : '' }}>材料（Material）</option>
-                                        <option value="method"      {{ ($item['category'] ?? '') === 'method' ? 'selected' : '' }}>方法（Method）</option>
-                                        <option value="measurement" {{ ($item['category'] ?? '') === 'measurement' ? 'selected' : '' }}>測定（Measurement）</option>
-                                        <option value="environment" {{ ($item['category'] ?? '') === 'environment' ? 'selected' : '' }}>環境（Environment）</option>
-                                        <option value="other"       {{ ($item['category'] ?? '') === 'other' ? 'selected' : '' }}>その他</option>
-                                    </select>
+                            <div class="other-row" style="margin-bottom:8px;">
+                                <textarea name="other_requirements[{{ $i }}][content]"
+                                          placeholder="要求内容"
+                                          style="width:30%;height:40px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;resize:none;">{{ $row['content'] ?? '' }}</textarea>
 
-                                    <input type="text"
-                                           name="pcn_items[{{ $i }}][title]"
-                                           value="{{ $item['title'] ?? '' }}"
-                                           placeholder="ラベル変更など"
-                                           style="width:200px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                                <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
 
-                                    <input type="number"
-                                           name="pcn_items[{{ $i }}][months_before]"
-                                           value="{{ $item['months_before'] ?? '' }}"
-                                           min="0"
-                                           style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                                    <span style="color:var(--text);">ヵ月前連絡</span>
+                                    <span style="font-weight:700;color:var(--text);">対応者：</span>
+
+                                    <input type="hidden"
+                                           name="other_requirements[{{ $i }}][responsible_employee_number]"
+                                           id="other-resp-no-{{ $i }}"
+                                           value="{{ $row['responsible_employee_number'] ?? '' }}">
+
+                                    <input type="hidden"
+                                           name="other_requirements[{{ $i }}][responsible_label]"
+                                           id="other-resp-label-{{ $i }}"
+                                           value="{{ $respLabel }}">
+
+                                    <span id="other-resp-display-{{ $i }}"
+                                          style="display:{{ $respLabel ? 'inline-block' : 'none' }};color:var(--text);font-weight:700;">
+                                        {{ $respLabel }}
+                                    </span>
 
                                     <button type="button"
-                                            onclick="removePcnRow(this)"
+                                            class="btn"
+                                            style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
+                                            onclick="openPopupAForOther({{ $i }})">
+                                        選択
+                                    </button>
+
+                                    <button type="button"
+                                            onclick="removeOtherRow(this)"
                                             style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
                                         削除
                                     </button>
                                 </div>
-                            @endforeach
-                        </div>
-
-                        <button type="button"
-                                onclick="addPcnRow()"
-                                style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
-                            ＋ 行追加
-                        </button>
-                    </td>
-                </tr>
-
-{{-- 8行目：その他要求 --}}
-<tr style="{{ $rowStyle }}">
-    <td style="{{ $labelCell }}">その他要求</td>
-    <td style="{{ $inputCell }}">
-        <div id="other-rows">
-            @php
-                $otherOld = old('other_requirements', [
-                    ['content' => null, 'responsible_employee_number' => null, 'responsible_label' => null],
-                ]);
-            @endphp
-
-            @foreach($otherOld as $i => $row)
-                @php
-                    $respLabel = $row['responsible_label'] ?? '';
-                @endphp
-
-                <div class="other-row" style="margin-bottom:8px;">
-                    <textarea name="other_requirements[{{ $i }}][content]"
-                              placeholder="要求内容"
-                              style="width:30%;height:40px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;resize:none;">{{ $row['content'] ?? '' }}</textarea>
-
-                    <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-
-                        {{-- ラベル --}}
-                        <span style="font-weight:700;color:var(--text);">対応者：</span>
-
-                        {{-- 保存用 --}}
-                        <input type="hidden"
-                               name="other_requirements[{{ $i }}][responsible_employee_number]"
-                               id="other-resp-no-{{ $i }}"
-                               value="{{ $row['responsible_employee_number'] ?? '' }}">
-
-                        <input type="hidden"
-                               name="other_requirements[{{ $i }}][responsible_label]"
-                               id="other-resp-label-{{ $i }}"
-                               value="{{ $respLabel }}">
-
-                        {{-- 選択済み表示（未選択なら完全に非表示＝幅0） --}}
-                        <span id="other-resp-display-{{ $i }}"
-                              style="display:{{ $respLabel ? 'inline-block' : 'none' }};color:var(--text);font-weight:700;">
-                            {{ $respLabel }}
-                        </span>
-
-                        {{-- 選択ボタン（左寄せ） --}}
-                        <button type="button"
-                                class="btn"
-                                style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
-                                onclick="openPopupAForOther({{ $i }})">
-                            選択
-                        </button>
-
-                        <button type="button"
-                                onclick="removeOtherRow(this)"
-                                style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                            削除
-                        </button>
+                            </div>
+                        @endforeach
                     </div>
-                </div>
-            @endforeach
-        </div>
 
-        <button type="button"
-                onclick="addOtherRow()"
-                style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
-            ＋ 行追加
-        </button>
-    </td>
-</tr>
-
-{{-- 9行目：Will --}}
-<tr style="{{ $rowStyle }}">
-    <td style="{{ $labelCell }}">Will</td>
-    <td style="{{ $inputCell }}">
-        <span style="color:var(--text);font-weight:700;">登録費：</span>
-        <input type="number"
-               name="will_initial"
-               value="{{ old('will_initial') }}"
-               min="0"
-               style="width:120px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-        <span style="color:var(--text);font-weight:700;">will</span>
-
-        &nbsp;&nbsp;
-        <span style="color:var(--text);font-weight:700;">月額：</span>
-        <input type="number"
-               name="will_monthly"
-               value="{{ old('will_monthly') }}"
-               min="0"
-               style="width:120px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-        <span style="color:var(--text);font-weight:700;">will</span>
-    </td>
-</tr>
-
-{{-- 10行目：月額管理費の分配 --}}
-<tr style="{{ $rowStyle }}">
-    <td style="{{ $labelCell }}">月額管理費の分配</td>
-    <td style="{{ $inputCell }}">
-              @if($errors->has('will_allocations'))
-            <div style="color:#dc2626; font-size:14px; margin:0 0 4px;">
-                {{ $errors->first('will_allocations') }}
-            </div>
-        @endif
-        <div id="will-rows">
-            @php
-                $allocOld = old('will_allocations', [
-                    ['employee_number' => null, 'employee_name' => null, 'percentage' => null],
-                ]);
-            @endphp
-
-            @foreach($allocOld as $i => $alloc)
-                <div class="will-row"
-                     style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-
-                    {{-- 保存用 --}}
-                    <input type="hidden"
-                           name="will_allocations[{{ $i }}][employee_number]"
-                           id="will-emp-no-{{ $i }}"
-                           value="{{ $alloc['employee_number'] ?? '' }}">
-                    <input type="hidden"
-                           name="will_allocations[{{ $i }}][employee_name]"
-                           id="will-emp-name-{{ $i }}"
-                           value="{{ $alloc['employee_name'] ?? '' }}">
-
-                    {{-- 選択ボタン（左寄せ） --}}
                     <button type="button"
-                            class="btn"
-                            style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
-                            onclick="openPopupAForWill({{ $i }})">
-                        選択
+                            onclick="addOtherRow()"
+                            style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
+                        ＋ 行追加
                     </button>
+                </td>
+            </tr>
 
-                    {{-- 選択済み表示 --}}
-                    <span id="will-emp-display-{{ $i }}"
-                          style="min-width:220px;display:inline-block;color:var(--text);font-weight:700;">
-                        @if(!empty($alloc['employee_number']) || !empty($alloc['employee_name']))
-                            {{ ($alloc['employee_number'] ?? '') }} {{ ($alloc['employee_name'] ?? '') }}
-                        @endif
-                    </span>
-
+            {{-- 9行目：Will --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">Will</td>
+                <td style="{{ $inputCell }}">
+                    <span style="color:var(--text);font-weight:700;">登録費：</span>
                     <input type="number"
-                           name="will_allocations[{{ $i }}][percentage]"
-                           value="{{ $alloc['percentage'] ?? '' }}"
-                           min="0" max="100"
-                           style="width:80px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                    <span style="color:var(--text);font-weight:700;">%</span>
+                           name="will_initial"
+                           value="{{ old('will_initial', $case->will_registration_cost) }}"
+                           min="0"
+                           style="width:120px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                    <span style="color:var(--text);font-weight:700;">will</span>
+
+                    &nbsp;&nbsp;
+                    <span style="color:var(--text);font-weight:700;">月額：</span>
+                    <input type="number"
+                           name="will_monthly"
+                           value="{{ old('will_monthly', $case->will_monthly_cost) }}"
+                           min="0"
+                           style="width:120px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                    <span style="color:var(--text);font-weight:700;">will</span>
+                </td>
+            </tr>
+
+            {{-- 10行目：月額管理費の分配 --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">月額管理費の分配</td>
+                <td style="{{ $inputCell }}">
+                    @if($errors->has('will_allocations'))
+                        <div style="color:#dc2626; font-size:14px; margin:0 0 4px;">
+                            {{ $errors->first('will_allocations') }}
+                        </div>
+                    @endif
+
+                    <div id="will-rows">
+@php
+    $allocOld = old('will_allocations');
+
+    if (is_null($allocOld)) {
+        $allocOld = $willAllocations->map(function ($alloc) {
+            return [
+                'employee_number' => $alloc->employee_number,
+                'employee_name'   => $alloc->employee_name,
+                'percentage'      => $alloc->percentage,
+            ];
+        })->toArray();
+
+        if (empty($allocOld)) {
+            $allocOld = [
+                ['employee_number' => null, 'employee_name' => null, 'percentage' => null],
+            ];
+        }
+    }
+@endphp
+
+                        @foreach($allocOld as $i => $alloc)
+                            <div class="will-row"
+                                 style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+
+                                <input type="hidden"
+                                       name="will_allocations[{{ $i }}][employee_number]"
+                                       id="will-emp-no-{{ $i }}"
+                                       value="{{ $alloc['employee_number'] ?? '' }}">
+                                <input type="hidden"
+                                       name="will_allocations[{{ $i }}][employee_name]"
+                                       id="will-emp-name-{{ $i }}"
+                                       value="{{ $alloc['employee_name'] ?? '' }}">
+
+                                <button type="button"
+                                        class="btn"
+                                        style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
+                                        onclick="openPopupAForWill({{ $i }})">
+                                    選択
+                                </button>
+
+                                <span id="will-emp-display-{{ $i }}"
+                                      style="min-width:220px;display:inline-block;color:var(--text);font-weight:700;">
+                                    @if(!empty($alloc['employee_number']) || !empty($alloc['employee_name']))
+                                        {{ ($alloc['employee_number'] ?? '') }} {{ ($alloc['employee_name'] ?? '') }}
+                                    @endif
+                                </span>
+
+                                <input type="number"
+                                       name="will_allocations[{{ $i }}][percentage]"
+                                       value="{{ $alloc['percentage'] ?? '' }}"
+                                       min="0" max="100"
+                                       style="width:80px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                                <span style="color:var(--text);font-weight:700;">%</span>
+
+                                <button type="button"
+                                        onclick="removeWillRow(this)"
+                                        style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
+                                    削除
+                                </button>
+                            </div>
+                        @endforeach
+                    </div>
 
                     <button type="button"
-                            onclick="removeWillRow(this)"
-                            style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                        削除
+                            onclick="addWillRow()"
+                            style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
+                        ＋ 行追加
                     </button>
-                </div>
-            @endforeach
-        </div>
+                </td>
+            </tr>
 
-        <button type="button"
-                onclick="addWillRow()"
-                style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
-            ＋ 行追加
-        </button>
-    </td>
-</tr>
+            {{-- 11行目：関連Q-WEB --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">関連Q-WEB</td>
+                <td style="{{ $inputCell }}">
+                    <textarea name="related_qweb"
+                              rows="2"
+                              style="width:40%;height:40px;padding:6px 8px;border-radius:4px;border:1px solid #9ca3af;resize:none;">{{ old('related_qweb', $case->related_qweb) }}</textarea>
+                </td>
+            </tr>
 
-
-                {{-- 11行目：関連Q-WEB --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">関連Q-WEB</td>
-                    <td style="{{ $inputCell }}">
-                        <textarea name="related_qweb"
-                                  rows="2"
-                                  style="width:40%;height:40px;padding:6px 8px;border-radius:4px;border:1px solid #9ca3af;resize:none;">{{ old('related_qweb') }}</textarea>
-                    </td>
-                </tr>
-            </table>
-        </div>
-       </form>
-
-<div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
-
-<div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
-    <div class="header">完了</div>
-    <div class="content" style="text-align:center; font-size:16px; padding:20px;">
-        登録しました
+        </table>
     </div>
-    <div class="actions" style="text-align:center;">
-        <button type="button" class="ui blue button" onclick="closeSuccessModal()">OK</button>
-    </div>
-</div>
 
-
-
+</form>
 
 {{-- ▼ 社員検索モーダルのオーバーレイ --}}
 <div class="ui dimmer modals page" id="emp-modal-overlay"></div>
-
 
 {{-- ▼ 社員検索モーダル本体 --}}
 <div class="ui large modal transition front" id="empsearch">
     <div class="header title_boader" id="emplbltype1">依頼者を選択（ダブルクリックで追加/削除）</div>
     <div class="header title_boader" id="emplbltype2" style="display: none;">共有したい人を選択（ダブルクリックで追加/削除）</div>
-    <div class="header title_boader" id="emplbltype3" style="display: none;">担当者を選択（ダブルクリックで追加/削除）</div>
+    <div class="header title_boader" id="emplbltype3" style="display: none;">費用負担先を選択（ダブルクリックで追加/削除）</div>
     <div class="header title_boader" id="emplbltype4" style="display: none;">担当技術者を選択（ダブルクリックで追加/削除）</div>
 
     <input type="hidden" id="empworkmode" value="0">
 
     <div class="scrolling content" style="min-height: 300px">
-<div class="cweb-search-group">
-    <input type="text" placeholder="keyword..." data-content="メンバーを検索" id="empkeyword" autocomplete="off">
+        <div class="cweb-search-group">
+            <input type="text" placeholder="keyword..." data-content="メンバーを検索" id="empkeyword" autocomplete="off">
 
-    <button class="cweb-search-btn" id="empicon">
-        <i class="search icon"></i>
-        検索
-    </button>
-</div>
+            <button class="cweb-search-btn" id="empicon">
+                <i class="search icon"></i>
+                検索
+            </button>
+        </div>
 
         <div class="ui two column grid emplist">
             <div class="row" style="margin-top: 1rem">
@@ -1167,8 +1323,25 @@
 </div>
 
 
-<script>
+{{-- 更新完了モーダル（メッセージだけ変更） --}}
+<div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
 
+<div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
+    <div class="header">完了</div>
+    <div class="content" style="text-align:center; font-size:16px; padding:20px;">
+        更新しました
+    </div>
+    <div class="actions" style="text-align:center;">
+        <button type="button" class="ui blue button" onclick="closeSuccessModal()">OK</button>
+    </div>
+</div>
+
+
+
+{{-- 社員検索モーダル（HTML部分も create と同じでOK。ここでは省略してもよい） --}}
+{{-- ★create.blade.php の emp-modal, empsearch 等の HTML・script をこの下にそのままコピペしてください --}}
+
+<script>
 let empContext = null;
     // mode: 'A' = 営業窓口, 'B' = 情報共有者, 'C' = 費用負担先
 let tempSelectedEmps = [];    // A/B/その他要求/Will用
@@ -1764,31 +1937,32 @@ function applyEmpSelection() {
     } else if (empContext === 'shared') {
         const hiddenContainer  = document.getElementById('shared-hidden-container');
         const displayContainer = document.getElementById('shared-display');
+
         if (hiddenContainer && displayContainer) {
             hiddenContainer.innerHTML  = '';
             displayContainer.innerHTML = '';
 
-            tempSelectedEmps.forEach(emp => {
-                // hidden: 番号
-                const hiddenNo = document.createElement('input');
-                hiddenNo.type  = 'hidden';
-                hiddenNo.name  = 'shared_employee_numbers[]';
-                hiddenNo.value = emp.no;
-                hiddenContainer.appendChild(hiddenNo);
+            if (tempSelectedEmps.length === 0) {
+                displayContainer.textContent = '-';
+            } else {
+                tempSelectedEmps.forEach((emp, index) => {
+                    // hidden（社員番号だけ送る）
+                    const hidden = document.createElement('input');
+                    hidden.type  = 'hidden';
+                    hidden.name  = 'shared_employee_numbers[]';
+                    hidden.value = emp.no;
+                    hiddenContainer.appendChild(hidden);
 
-                // hidden: 表示ラベル（氏名）
-                const hiddenLabel = document.createElement('input');
-                hiddenLabel.type  = 'hidden';
-                hiddenLabel.name  = 'shared_employee_labels[]';
-                hiddenLabel.value = emp.name;
-                hiddenContainer.appendChild(hiddenLabel);
+                    // 表示：社員番号 / 名前
+                    const textNode = document.createTextNode(emp.no + ' / ' + emp.name);
+                    displayContainer.appendChild(textNode);
 
-                // 表示用
-                const line = document.createElement('div');
-                line.style.cssText = 'color:var(--text);font-weight:700;';
-                line.textContent = emp.no + ' / ' + emp.name;
-                displayContainer.appendChild(line);
-            });
+                    // 「、」区切り
+                    if (index < tempSelectedEmps.length - 1) {
+                        displayContainer.appendChild(document.createTextNode('、'));
+                    }
+                });
+            }
         }
 
     } else if (empContext === 'cost') {
@@ -1810,7 +1984,7 @@ function applyEmpSelection() {
 
     } else if (empContext === 'other') {
         if (currentOtherIndex !== null) {
-            const no    = tempSelectedEmps[0]?.no   || '';
+            const no    = tempSelectedEmps[0]?.no || '';
             const name  = tempSelectedEmps[0]?.name || '';
             const noEl  = document.getElementById('other-resp-no-' + currentOtherIndex);
             const lblEl = document.getElementById('other-resp-label-' + currentOtherIndex);
@@ -1826,7 +2000,7 @@ function applyEmpSelection() {
 
     } else if (empContext === 'will') {
         if (currentWillIndex !== null) {
-            const no    = tempSelectedEmps[0]?.no   || '';
+            const no    = tempSelectedEmps[0]?.no || '';
             const name  = tempSelectedEmps[0]?.name || '';
             const noEl   = document.getElementById('will-emp-no-' + currentWillIndex);
             const nameEl = document.getElementById('will-emp-name-' + currentWillIndex);
@@ -1841,6 +2015,7 @@ function applyEmpSelection() {
         }
     }
 
+    // 最後に必ずモーダルを閉じる
     closeEmpModal();
 }
 
@@ -1911,7 +2086,55 @@ function closeSuccessModal() {
     window.location.href = "{{ route('cweb.cases.index') }}";
 }
 
+    // ▼ 対象製品サブ分類の初期選択だけ、old値を渡すようにしておく
+    document.addEventListener('DOMContentLoaded', function () {
+        const mainSelect = document.getElementById('product-main');
+        const subSelect  = document.getElementById('product-sub');
+        if (!mainSelect || !subSelect) return;
 
+        const initialMain = mainSelect.value;
+        const initialSub  = "{{ $oldSub }}"; // 上の PHP 変数を使う
+
+        refreshProductSubOptions(initialMain, initialSub);
+
+        mainSelect.addEventListener('change', function () {
+            refreshProductSubOptions(this.value, '');
+        });
+    });
+
+    // ▼ 更新完了モーダル（表示トリガーはコントローラ側でセッションフラグを見て実行する想定）
+    function showSuccessModal() {
+        const overlay = document.getElementById('success-modal-overlay');
+        const modal   = document.getElementById('success-modal');
+        if (!overlay || !modal) return;
+
+        overlay.classList.add('visible', 'active');
+        overlay.style.display = 'flex';
+        overlay.style.opacity = '1';
+
+        modal.classList.add('visible', 'active');
+        modal.style.opacity = '1';
+        modal.style.pointerEvents = 'auto';
+    }
+
+    function closeSuccessModal() {
+        const overlay = document.getElementById('success-modal-overlay');
+        const modal   = document.getElementById('success-modal');
+
+        if (overlay) {
+            overlay.classList.remove('visible', 'active');
+            overlay.style.opacity = '0';
+            overlay.style.display = 'none';
+        }
+        if (modal) {
+            modal.classList.remove('visible', 'active');
+            modal.style.opacity = '0';
+            modal.style.pointerEvents = 'none';
+        }
+
+        // 必要なら詳細画面 or 一覧へ戻す
+        window.location.href = "{{ route('cweb.cases.index') }}";
+    }
 </script>
 
 @endsection

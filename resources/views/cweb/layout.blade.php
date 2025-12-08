@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>C-WEB</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.4.1/semantic.min.css">
 
     <style>
         :root{
@@ -56,10 +57,102 @@
             gap:12px;
         }
         .cweb-header-right {
-            display:flex;
-            align-items:center;
-            gap:16px;
-        }
+    display:flex;
+    align-items:center;
+    gap:12px;
+    color:#e5e7eb;  /* 右側の文字色を少し薄めに */
+}
+
+/* 日本語 / EN ブロック */
+.cweb-header-lang {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding-left: 12px;  /* 左に縦線の余白 */
+}
+
+/* 言語の左にヘッダーの横棒を縦にズバッと入れる */
+.cweb-header-lang::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;     /* 上下にはみ出させて「がっつり」見せる */
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* 「日本語 / EN」ボタン本体 */
+.cweb-header-lang-toggle {
+    border: none;
+    background: transparent;
+    color: inherit;           /* 白系をそのまま継承 */
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 6px;
+    line-height: 1.4;
+    opacity: 0.75;            /* 通常は少し薄く */
+    transition:
+        opacity .15s ease,
+        background-color .15s ease,
+        transform .04s ease;
+}
+
+/* ユーザー名ボタン */
+.cweb-header-user-toggle {
+    position: relative;
+    margin-left: 8px;
+    padding-left: 12px;       /* 左に縦線ぶん余白 */
+
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    line-height: 1.4;
+    opacity: 0.75;
+    transition:
+        opacity .15s ease,
+        background-color .15s ease,
+        transform .04s ease;
+}
+
+/* ユーザー名の左側にも縦線を入れる */
+.cweb-header-user-toggle::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: -6px;
+    bottom: -6px;
+    width: 1px;
+    background: rgba(148, 163, 184, 0.6);
+}
+
+/* ホバーしたら不透明＋背景ちょい色付き（反射ではなく色が濃くなるイメージ） */
+.cweb-header-lang-toggle:hover,
+.cweb-header-user-toggle:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* クリック時、少しだけ縮む */
+.cweb-header-lang-toggle:active,
+.cweb-header-user-toggle:active {
+    transform: scale(0.97);
+}
+
+/* ダークモード時（縦線の色を少し調整） */
+@media (prefers-color-scheme: dark) {
+    .cweb-header-right {
+        color:#e5e7eb;
+    }
+    .cweb-header-lang::before,
+    .cweb-header-user-toggle::before {
+        background: rgba(75, 85, 99, 0.8);
+    }
+}
+
 
         .cweb-brand-link {
             color:#ffffff;

@@ -16,6 +16,37 @@ use Illuminate\Support\Facades\Validator;
 
 class CwebCaseController extends Controller
 {
+ public function abolish(Request $request, CwebCase $case)
+    {
+        // 必要なら権限チェック
+        // $this->authorize('update', $case);
+
+        // ポップアップDで入力したコメントを受け取る
+        $validated = $request->validate([
+            'abolish_comment' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $commentText = $validated['abolish_comment'];
+
+        // ① コメントをコメント欄に残したい場合（任意）
+        // ※ ここはあなたのコメント用テーブル/リレーション名に合わせて調整してね
+        if (method_exists($case, 'comments')) {
+            $case->comments()->create([
+                'body'    => "【廃止】\n" . $commentText,
+                'user_id' => auth()->id(),
+            ]);
+        }
+
+        // ② ステータスを廃止に変更（DBに status カラムがある前提）
+        $case->status = 'closed';   // active / closed で運用している想定
+        $case->save();
+
+        // ③ 完了後は案件詳細に戻す or 一覧に戻す
+        return redirect()
+            ->route('cweb.cases.index')
+            ->with('ok', '案件を廃止しました。');
+    }
+
     // 新規登録保存
 public function store(Request $request)
 {
@@ -71,14 +102,33 @@ public function store(Request $request)
     $data = $validator->validate();
 
     // ▼ ③ 行追加系：空行除去（今まで通り）
-    $data['pcn_items'] = collect($data['pcn_items'] ?? [])
-        ->filter(function ($row) {
-            return filled($row['category'] ?? null)
-                || filled($row['title'] ?? null)
-                || filled($row['months_before'] ?? null);
-        })
-        ->values()
-        ->all();
+// ▼ ③ 行追加系：空行除去（PCN）
+$data['pcn_items'] = collect($data['pcn_items'] ?? [])
+    ->filter(function ($row) {
+        // 何か1つでも入力されているか
+        $hasAny = filled($row['category'] ?? null)
+               || filled($row['title'] ?? null)
+               || filled($row['months_before'] ?? null);
+
+        if (!$hasAny) {
+            // 完全空行は捨てる
+            return false;
+        }
+
+        // 何か入力してあるのに months_before が空欄なら、その行も捨てる
+        if (!filled($row['months_before'] ?? null)) {
+            return false;
+        }
+
+        return true;
+    })
+    ->map(function ($row) {
+        // months_before を必ず int にしておく
+        $row['months_before'] = (int)($row['months_before'] ?? 0);
+        return $row;
+    })
+    ->values()
+    ->all();
 
     $data['other_requirements'] = collect($data['other_requirements'] ?? [])
         ->filter(function ($row) {
@@ -188,16 +238,17 @@ DB::transaction(function () use ($currentUser, $data, $salesUser, $nextManageNo)
         ]);
     }
 
-    // --- PCN項目 ---
-    foreach ($data['pcn_items'] as $item) {
-        CwebCasePcnItem::create([
-            'case_id'       => $case->id,
-            'category'      => $item['category'] ?? '',
-            'title'         => $item['title'] ?? null,
-            'months_before' => $item['months_before'] ?? null,
-            'note'          => null,
-        ]);
-    }
+// --- PCN項目 ---
+foreach ($data['pcn_items'] as $item) {
+    CwebCasePcnItem::create([
+        'case_id'       => $case->id,
+        'category'      => $item['category'] ?? '',
+        'title'         => $item['title'] ?? null,
+        'months_before' => (int)$item['months_before'],  // ← 必ず int
+        'note'          => null,
+    ]);
+}
+
 
     // --- その他要求 ---
     foreach ($data['other_requirements'] as $req) {
@@ -235,26 +286,172 @@ public function index(Request $request)
     $direction = $request->query('direction', 'asc') === 'desc' ? 'desc' : 'asc';
 
     // ★ 絞り込み用
-    $status   = (string)$request->query('status', '');
-    $category = (string)$request->query('category', '');
+    $status       = (string)$request->query('status', '');
+    $category     = (string)$request->query('category', '');
     $productGroup = (string)$request->query('product_group', '');
     $productCode  = (string)$request->query('product_code', '');
+
+    /*
+    |--------------------------------------------------------------------------
+    | ① tab=product のときだけ、専用ビューに切り替え
+    |--------------------------------------------------------------------------
+    */
+    /*
+    |--------------------------------------------------------------------------
+    | ① tab=product のときだけ、専用ビューに切り替え
+    |--------------------------------------------------------------------------
+    */
+    if ($tab === 'product') {
+
+        // ▼ プルダウン①〜②の中身（仕様どおり固定）
+        $groupOptions = [
+            'HogoMax-内製品'   => ['102','103','104','105','106','107','108','152','153','201','202','203','204'],
+            'HogoMax-OEM品'    => ['002','003'],
+            'StayClean-内製品' => ['201','301','401'],
+            'StayClean-OEM品'  => ['-A','-F','-R'],
+            'ResiFlat-内製品'  => ['103'],
+            'その他'           => [],
+        ];
+
+        $hasGroup = $productGroup !== '';
+
+        // ▼ 契約登録数（標準管理 / PCN / その他要求）
+        $contractSummary = [
+            'standard' => 0,
+            'pcn'      => 0,
+            'other'    => 0,
+        ];
+
+        // ▼ PCN 管理対象のカテゴリ定義
+        //   -> 配列の key が画面ラベル（仕様書内容〜その他変更）
+        //   -> value に DB 上の category の候補値を全部並べる
+$pcnCategoryDefs = [
+    '仕様書内容' => ['spec', '仕様書内容'],
+    '人員変更'   => ['man', '人員変更'],
+    '設備変更'   => ['machine', '設備変更'],
+    '手順変更'   => ['method', '手順変更'],
+    '材料変更'   => ['material', '材料変更'],
+    '測定変更'   => ['measurement', '測定変更'],
+    '環境変更'   => ['environment', '環境変更'],
+    'その他変更' => ['other', 'other_change', 'その他変更'],
+        ];
+
+        // 初期値
+        $pcnSummary = [];
+        foreach ($pcnCategoryDefs as $label => $_candidates) {
+            $pcnSummary[$label] = [
+                'label'      => $label,
+                'count'      => 0,
+                'max_months' => null,
+                'customer'   => null,
+                'cases'      => [],
+            ];
+        }
+
+        if ($hasGroup) {
+            /*
+             * ▼ 対象案件を一気に取得（pcnItems をリレーションでロード）
+             */
+            $casesForProductQuery = CwebCase::query()
+                ->with('pcnItems')            // ← ここがポイント
+                ->where('status', 'active')
+                ->where('product_group', $productGroup);
+
+            if ($productCode !== '') {
+                $casesForProductQuery->where('product_code', $productCode);
+            }
+
+            $casesForProduct = $casesForProductQuery->get();
+
+            // 契約登録数（標準管理 / PCN / その他要求）
+            $contractSummary['standard'] = $casesForProduct->where('category_standard', true)->count();
+            $contractSummary['pcn']      = $casesForProduct->where('category_pcn',      true)->count();
+            $contractSummary['other']    = $casesForProduct->where('category_other',    true)->count();
+
+            /*
+             * ▼ PCNカテゴリごとの集計
+             */
+            foreach ($casesForProduct as $case) {
+                foreach ($case->pcnItems as $pcn) {
+                    $catRaw  = trim((string)$pcn->category);
+                    $months  = (int)($pcn->months_before ?? 0);
+
+                    // どのカテゴリラベルに属するか判定
+                    foreach ($pcnCategoryDefs as $label => $candidates) {
+                        if (!in_array($catRaw, $candidates, true)) {
+                            continue;
+                        }
+
+                        // 件数カウント
+                        $pcnSummary[$label]['count']++;
+
+                        // 詳細（案件一覧）
+                        $pcnSummary[$label]['cases'][] = [
+                            'id'            => $case->id, 
+                            'manage_no'     => $case->manage_no,
+                            'customer_name' => $case->customer_name,
+                            'months_before' => $months,
+                        ];
+
+                        // 最長通知期間 & その顧客
+                        if (
+                            $pcnSummary[$label]['max_months'] === null ||
+                            $months > $pcnSummary[$label]['max_months']
+                        ) {
+                            $pcnSummary[$label]['max_months'] = $months;
+                            $pcnSummary[$label]['customer']   = $case->customer_name;
+                        }
+
+                        // どこか1カテゴリにマッチしたら次のPCN行へ
+                        break;
+                    }
+                }
+            }
+
+            // 通知期間の数字が大きい順に並べ直し（詳細行用）
+            foreach ($pcnSummary as &$s) {
+                usort($s['cases'], function ($a, $b) {
+                    return ($b['months_before'] ?? 0) <=> ($a['months_before'] ?? 0);
+                });
+            }
+            unset($s);
+        }
+
+        // ★ ここで product 用ビューを返して終了
+        return view('cweb.cases.product', [
+            'tab'             => $tab,
+            'productGroup'    => $productGroup,
+            'productCode'     => $productCode,
+            'groupOptions'    => $groupOptions,
+            'contractSummary' => $contractSummary,
+            'pcnSummary'      => $pcnSummary,
+        ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ② ここから下は「すべて」「あなたが関わる案件」タブ用（元コードそのまま）
+    |--------------------------------------------------------------------------
+    */
     $query = CwebCase::query()
         ->leftJoin('users as sales', 'sales.employee_number', '=', 'cweb_cases.sales_contact_employee_number')
         ->select('cweb_cases.*', 'sales.name as sales_contact_employee_name');
 
-    // ▼ 「あなたが関わる案件」タブ
+    // 「あなたが関わる案件」タブ
     if ($tab === 'mine') {
-        $query->where(function ($inner) use ($user) {
-            $inner->where('cweb_cases.created_by_user_id', $user->id);
+        $userId = $user->id;
+        $empNo  = (string) $user->employee_number;
 
-            if (!empty($user->employee_number)) {
-                $inner->orWhere('cweb_cases.sales_contact_employee_number', $user->employee_number);
+        $query->where(function ($q) use ($userId, $empNo) {
+            $q->where('created_by_user_id', $userId);
+
+            if ($empNo !== '') {
+                $q->orWhere('sales_contact_employee_number', $empNo);
             }
         });
     }
 
-    // ▼ キーワード検索
+    // キーワード検索
     if ($keyword !== '') {
         $query->where(function ($inner) use ($keyword) {
             $inner->where('cweb_cases.manage_no', 'like', "%{$keyword}%")
@@ -263,12 +460,12 @@ public function index(Request $request)
         });
     }
 
-    // ▼ ステータス絞り込み
+    // ステータス絞り込み
     if ($status !== '') {
         $query->where('cweb_cases.status', $status);
     }
 
-    // ▼ カテゴリー絞り込み（booleanフラグ想定）
+    // カテゴリー絞り込み
     if ($category === 'standard') {
         $query->where('cweb_cases.category_standard', true);
     } elseif ($category === 'pcn') {
@@ -276,14 +473,16 @@ public function index(Request $request)
     } elseif ($category === 'other') {
         $query->where('cweb_cases.category_other', true);
     }
-        // ▼ 対象製品：大カテゴリのみ or 大+小 の両方をサポート
+
+    // 対象製品絞り込み（既存仕様）
     if ($productGroup !== '') {
         $query->where('cweb_cases.product_group', $productGroup);
     }
     if ($productCode !== '') {
         $query->where('cweb_cases.product_code', $productCode);
     }
-$productGroups = CwebCase::select('product_group')
+
+    $productGroups = CwebCase::select('product_group')
         ->whereNotNull('product_group')
         ->distinct()
         ->orderBy('product_group')
@@ -294,31 +493,158 @@ $productGroups = CwebCase::select('product_group')
         ->distinct()
         ->orderBy('product_code')
         ->pluck('product_code');
-    // ▼ ソート
-switch ($sort) {
-    case 'customer':
-        $query->orderBy('cweb_cases.customer_name', $direction);
-        break;
-    case 'status':
-        $query->orderBy('cweb_cases.status', $direction);
-        break;
-}
-// 降順
-$query->orderBy('cweb_cases.manage_no', 'desc');
-    $cases = $query->paginate(15); // ← appends は Blade 側でやるならここまで
+
+    // ソート
+    switch ($sort) {
+        case 'customer':
+            $query->orderBy('cweb_cases.customer_name', $direction);
+            break;
+        case 'status':
+            $query->orderBy('cweb_cases.status', $direction);
+            break;
+    }
+
+    // 管理番号降順
+    $query->orderBy('cweb_cases.manage_no', 'desc');
+
+        // ▼ 集計用の初期値
+    $contractSummary = [
+        'standard' => 0,
+        'pcn'      => 0,
+        'other'    => 0,
+    ];
+    $pcnSummary = [];
+
+    // ▼ 「製品ごとの要求内容一覧」タブ ＆ 製品が選択されているときだけ集計
+    if ($tab === 'product' && $productGroup !== '') {
+
+        // 対象製品の案件を全部取得（pcnItems もまとめてロード）
+        $casesForProductQuery = CwebCase::query()
+            ->with('pcnItems')
+            ->where('product_group', $productGroup);
+
+        if ($productCode !== '') {
+            $casesForProductQuery->where('product_code', $productCode);
+        }
+
+        $casesForProduct = $casesForProductQuery->get();
+
+        // 契約登録数（標準管理 / PCN / その他要求）
+        $contractSummary['standard'] = $casesForProduct->where('category_standard', true)->count();
+        $contractSummary['pcn']      = $casesForProduct->where('category_pcn',      true)->count();
+        $contractSummary['other']    = $casesForProduct->where('category_other',    true)->count();
+
+        // PCN の項目ごとの集計定義
+        // ※ category に入っている値に合わせて match を調整してOK
+        $pcnCategories = [
+            'spec' => [
+                'label' => '仕様書内容',
+                'match' => ['仕様書内容', 'spec'],
+            ],
+            'personnel' => [
+                'label' => '人員変更',
+                'match' => ['人員変更', 'personnel'],
+            ],
+            'equipment' => [
+                'label' => '設備変更',
+                'match' => ['設備変更', 'equipment'],
+            ],
+            'procedure' => [
+                'label' => '手順変更',
+                'match' => ['手順変更', 'procedure'],
+            ],
+            'material' => [
+                'label' => '材料変更',
+                'match' => ['材料変更', 'material'],
+            ],
+            'measurement' => [
+                'label' => '測定変更',
+                'match' => ['測定変更', 'measurement'],
+            ],
+            'environment' => [
+                'label' => '環境変更',
+                'match' => ['環境変更', 'environment'],
+            ],
+            'other' => [
+                'label' => 'その他変更',
+                'match' => ['その他変更', 'other'],
+            ],
+        ];
+
+        // 初期化
+        foreach ($pcnCategories as $key => $info) {
+            $pcnSummary[$key] = [
+                'label'      => $info['label'],
+                'count'      => 0,
+                'max_months' => null,
+                'customer'   => null,
+                'cases'      => [],
+            ];
+        }
+
+        // 案件ごとに PCN 項目を集計
+        foreach ($casesForProduct as $case) {
+            foreach ($case->pcnItems as $pcn) {
+                $cat = (string) $pcn->category;
+
+                // どのカテゴリに属するか探索
+                foreach ($pcnCategories as $key => $info) {
+                    if (!in_array($cat, $info['match'], true)) {
+                        continue;
+                    }
+
+                    // このカテゴリの集計に反映
+                    $months = (int) ($pcn->months_before ?? 0);
+
+                    $pcnSummary[$key]['count']++;
+
+                    $pcnSummary[$key]['cases'][] = [
+                        'manage_no'     => $case->manage_no,
+                        'customer_name' => $case->customer_name,
+                        'months_before' => $months,
+                    ];
+
+                    // 最長通知期間＆その顧客
+                    if (
+                        $pcnSummary[$key]['max_months'] === null ||
+                        $months > $pcnSummary[$key]['max_months']
+                    ) {
+                        $pcnSummary[$key]['max_months'] = $months;
+                        $pcnSummary[$key]['customer']   = $case->customer_name;
+                    }
+
+                    // マッチしたら次のPCN項目へ
+                    break;
+                }
+            }
+        }
+
+        // 詳細表示用に、各カテゴリの cases を「通知期間の大きい順」にソート
+        foreach ($pcnSummary as &$s) {
+            usort($s['cases'], function ($a, $b) {
+                return ($b['months_before'] ?? 0) <=> ($a['months_before'] ?? 0);
+            });
+        }
+        unset($s);
+    }
+
+
+    $cases = $query->paginate(15);
 
     return view('cweb.cases.index', [
-        'cases'     => $cases,
-        'tab'       => $tab,
-        'sort'      => $sort,
-        'direction' => $direction,
-        'keyword'   => $keyword,
-        'status'    => $status,
-        'category'  => $category,
+        'cases'        => $cases,
+        'tab'          => $tab,
+        'sort'         => $sort,
+        'direction'    => $direction,
+        'keyword'      => $keyword,
+        'status'       => $status,
+        'category'     => $category,
         'productGroup' => $productGroup,
         'productCode'  => $productCode,
-        'productGroups' => $productGroups,
-        'productCodes'  => $productCodes,
+        'productGroups'=> $productGroups,
+        'productCodes' => $productCodes,
+        'contractSummary' => $contractSummary,
+        'pcnSummary'      => $pcnSummary,
     ]);
 }
 
@@ -345,7 +671,141 @@ public function create()
 
     return view('cweb.cases.create', [
         'nextManagementNo' => $nextManagementNo,
+        'isEditing'        => true,
         // 他に渡している変数もここに並べる
     ]);
 }
+public function show(Request $request, CwebCase $case)
+{
+    // ▼ ここは「関数の中」です！この中に $case->load(...) を書く
+    $case->load([
+        'sharedUsers.user',       // 情報共有者（中間テーブル→User）
+        'pcnItems',
+        'otherRequirements',
+        'willAllocations',
+        'comments.user',
+    ]);
+
+        $sharedUsers = $case->sharedUsers
+        ->where('role', 'shared')         // sales は除外
+        ->filter(fn ($row) => $row->user) // user がいるものだけ
+        ->unique('user_id')               // 同じ人が重複していたら1件にまとめる
+        ->values();
+
+    // カテゴリー表示用
+    $categories = [];
+    if ($case->category_standard) {
+        $categories[] = '標準管理';
+    }
+    if ($case->category_pcn) {
+        $categories[] = 'PCN';
+    }
+    if ($case->category_other) {
+        $categories[] = 'その他要求';
+    }
+    $categoryLabel = $categories ? implode(' / ', $categories) : '-';
+
+    // ステータス
+    $statusLabel = match ($case->status ?? '') {
+        'active' => 'アクティブ',
+        'closed' => '廃止',
+        default  => '不明',
+    };
+
+    // 製品（グループ＋コード）
+    $productLabel = trim(($case->product_group ?? '') . ' ' . ($case->product_code ?? ''));
+
+    // ▼ 営業窓口（社員番号 → 名前）
+    $salesEmployeeNumber = $case->sales_contact_employee_number;
+    $salesEmployeeName   = null;
+    if (!empty($salesEmployeeNumber)) {
+        $salesUser = User::where('employee_number', $salesEmployeeNumber)->first();
+        $salesEmployeeName = optional($salesUser)->name;
+    }
+
+    // ▼ その他要求：対応者の社員番号 → User 名のマップ
+    $otherNumbers = $case->otherRequirements
+        ? $case->otherRequirements
+            ->pluck('responsible_employee_number')
+            ->filter()
+            ->unique()
+            ->values()
+        : collect();
+
+    $otherEmployees = $otherNumbers->isNotEmpty()
+        ? User::whereIn('employee_number', $otherNumbers)->get()->keyBy('employee_number')
+        : collect();
+
+    return view('cweb.cases.show', [
+        'case'                => $case,
+        'categoryLabel'       => $categoryLabel,
+        'statusLabel'         => $statusLabel,
+        'productLabel'        => $productLabel ?: '-',
+        'salesEmployeeNumber' => $salesEmployeeNumber,
+        'salesEmployeeName'   => $salesEmployeeName,
+        'otherEmployees'      => $otherEmployees,
+         'sharedUsers'         => $sharedUsers, 
+    ]);
+}
+public function edit(CwebCase $case)
+{
+    // いったんは「編集画面」のビューを呼び出すだけ
+    // （中身は create.blade.php をベースにした edit.blade.php をこれから作る想定）
+    return view('cweb.cases.edit', [
+        'case'              => $case,
+        'nextManagementNo'  => $case->manage_no, // ヘッダーの管理番号表示に使う
+    ]);
+    
+}
+public function update(Request $request, CwebCase $case)
+    {
+        // ▼ バリデーション（最低限）
+        $data = $request->validate([
+            'sales_employee_number' => ['required', 'string'],
+            'customer_name'         => ['required', 'string', 'max:255'],
+            'categories'            => ['required', 'array'],
+            'product_main'          => ['required', 'string'],
+            'product_sub'           => ['required', 'string'],
+            'cost_owner_code'       => ['required', 'string'],
+            'will_initial'          => ['nullable', 'integer', 'min:0'],
+            'will_monthly'          => ['nullable', 'integer', 'min:0'],
+            'related_qweb'          => ['nullable', 'string'],
+        ]);
+
+        // ▼ 基本項目の更新
+        $case->sales_contact_employee_number = $data['sales_employee_number'];
+        $case->customer_name                 = $data['customer_name'];
+        $case->product_group                 = $data['product_main'];
+        $case->product_code                  = $data['product_sub'];
+        $case->cost_responsible_code         = $data['cost_owner_code'];
+
+        // カテゴリー（チェックボックス → フラグ）
+        $cats = $data['categories'] ?? [];
+        $case->category_standard = in_array('standard', $cats, true);
+        $case->category_pcn      = in_array('pcn',      $cats, true);
+        $case->category_other    = in_array('other',    $cats, true);
+
+        // Will関連
+        $case->will_registration_cost = $data['will_initial'] ?? null;
+        $case->will_monthly_cost      = $data['will_monthly'] ?? null;
+
+        // 関連Q-WEB
+        $case->related_qweb = $data['related_qweb'] ?? null;
+
+        $case->save();
+
+        /*
+         * ▼ ここから下は「子テーブル更新」が必要ならあとで肉付け
+         *   - $request->input('pcn_items', [])
+         *   - $request->input('other_requirements', [])
+         *   - $request->input('will_allocations', [])
+         *   - $request->input('shared_employee_numbers', [])
+         *   を使って、紐づくレコードを入れ直すイメージ。
+         */
+
+        return redirect()
+            ->route('cweb.cases.index')
+            ->with('ok', '案件を更新しました。');
+    }
+
 }

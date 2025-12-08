@@ -39,6 +39,13 @@ Route::middleware('auth')->prefix('cweb')->name('cweb.')->group(function () {
     Route::get('/cases/{case}/edit', [CwebCaseController::class, 'edit'])->name('cases.edit');
     Route::put('/cases/{case}', [CwebCaseController::class, 'update'])->name('cases.update');
     Route::post('/cases/{case}/abolish', [CwebCaseController::class, 'abolish'])->name('cases.abolish');
+    Route::get('/cweb/cases/{case}/edit', [CwebCaseController::class, 'edit'])
+    ->name('cweb.cases.edit');
+    Route::put('/cweb/cases/{case}', [CwebCaseController::class, 'update'])
+    ->name('cweb.cases.update');
+Route::post('/cweb/cases/{case}/abolish', [CwebCaseController::class, 'abolish'])    ->name('cweb.cases.abolish');
+
+
 
     // コメント投稿
     Route::post('/cases/{case}/comments', [CwebCaseController::class, 'storeComment'])->name('cases.comments.store');
