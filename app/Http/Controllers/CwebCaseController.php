@@ -43,7 +43,7 @@ class CwebCaseController extends Controller
 
         // ③ 完了後は案件詳細に戻す or 一覧に戻す
         return redirect()
-            ->route('cweb.cases.index')
+            ->route('cweb.cases.show')
             ->with('ok', '案件を廃止しました。');
     }
 
@@ -52,7 +52,6 @@ public function store(Request $request)
 {
     $currentUser = $request->user();
 
-    // ▼ ① Validator生成
     $validator = Validator::make(
         $request->all(),
         [
@@ -79,14 +78,15 @@ public function store(Request $request)
             'pcn_items.*.title'         => ['nullable', 'string', 'max:255'],
             'pcn_items.*.months_before' => ['nullable', 'integer', 'min:0'],
 
-            'other_requirements'                        => ['nullable', 'array'],
-            'other_requirements.*.content'              => ['nullable', 'string'],
+            'other_requirements'                               => ['nullable', 'array'],
+            'other_requirements.*.content'                     => ['nullable', 'string'],
             'other_requirements.*.responsible_employee_number' => ['nullable', 'string', 'max:10'],
+            'other_requirements.*.responsible_label'           => ['nullable', 'string', 'max:100'], // ★追加
 
-            'will_allocations'                     => ['nullable', 'array'],
-            'will_allocations.*.employee_number'  => ['nullable', 'string', 'max:10'],
-            'will_allocations.*.employee_name'    => ['nullable', 'string', 'max:100'],
-            'will_allocations.*.percentage'       => ['nullable', 'integer', 'min:0', 'max:100'],
+            'will_allocations'                      => ['nullable', 'array'],
+            'will_allocations.*.employee_number'    => ['nullable', 'string', 'max:10'],
+            'will_allocations.*.employee_name'      => ['nullable', 'string', 'max:100'],
+            'will_allocations.*.percentage'         => ['nullable', 'integer', 'min:0', 'max:100'],
         ],
         [
             'sales_employee_number.required' => '営業窓口を選択してください。',
@@ -98,53 +98,89 @@ public function store(Request $request)
         ]
     );
 
-    // ▼ ② 一旦バリデーション（ここで通常の required 等をチェック）
+    // ★ここが本体：1つでも入れたら他も必須（行単位）
+    $validator->after(function ($v) use ($request) {
+
+        // --- PCN管理項目 ---
+        foreach ((array)$request->input('pcn_items', []) as $i => $row) {
+            $cat   = $row['category'] ?? null;
+            $title = $row['title'] ?? null;
+            $month = $row['months_before'] ?? null;
+
+            $hasAny = filled($cat) || filled($title) || filled($month);
+            if ($hasAny) {
+                if (!filled($cat))   $v->errors()->add("pcn_items.$i.category", "PCN管理項目（".($i+1)."行目）：区分を選択してください。");
+                if (!filled($title)) $v->errors()->add("pcn_items.$i.title",    "PCN管理項目（".($i+1)."行目）：ラベル変更などを入力してください。");
+                if (!filled($month)) $v->errors()->add("pcn_items.$i.months_before", "PCN管理項目（".($i+1)."行目）：ヵ月前連絡を入力してください。");
+            }
+        }
+
+        // --- その他要求 ---
+        foreach ((array)$request->input('other_requirements', []) as $i => $row) {
+            $content = $row['content'] ?? null;
+            $respNo  = $row['responsible_employee_number'] ?? null;
+            $respLbl = $row['responsible_label'] ?? null;
+
+            $hasAny = filled($content) || filled($respNo) || filled($respLbl);
+            if ($hasAny) {
+                if (!filled($content)) $v->errors()->add("other_requirements.$i.content", "その他要求（".($i+1)."行目）：要求内容を入力してください。");
+                if (!filled($respNo))  $v->errors()->add("other_requirements.$i.responsible_employee_number", "その他要求（".($i+1)."行目）：対応者を選択してください。");
+                if (!filled($respLbl)) $v->errors()->add("other_requirements.$i.responsible_label", "その他要求（".($i+1)."行目）：対応者名が未設定です（再選択してください）。");
+            }
+        }
+
+        // --- Will（登録費/月額：片方入れたら両方必須） ---
+        $willInit   = $request->input('will_initial');
+        $willMonthly= $request->input('will_monthly');
+        $hasAnyWill = filled($willInit) || filled($willMonthly);
+
+        if ($hasAnyWill) {
+            if (!filled($willInit))    $v->errors()->add('will_initial', 'Will：登録費を入力してください（片方だけは不可）。');
+            if (!filled($willMonthly)) $v->errors()->add('will_monthly', 'Will：月額を入力してください（片方だけは不可）。');
+        }
+
+        // --- 月額管理費の分配（行単位で全部入力 or 全部空） ---
+        $allocNonEmpty = collect((array)$request->input('will_allocations', []))
+            ->filter(function ($row) {
+                return filled($row['employee_number'] ?? null)
+                    || filled($row['employee_name'] ?? null)
+                    || filled($row['percentage'] ?? null);
+            });
+
+        foreach ($allocNonEmpty as $i => $row) {
+            if (!filled($row['employee_number'] ?? null)) $v->errors()->add("will_allocations.$i.employee_number", "月額管理費の分配（".($i+1)."行目）：担当者を選択してください。");
+            if (!filled($row['employee_name'] ?? null))   $v->errors()->add("will_allocations.$i.employee_name",   "月額管理費の分配（".($i+1)."行目）：担当者名が未設定です（再選択してください）。");
+            if (!filled($row['percentage'] ?? null))      $v->errors()->add("will_allocations.$i.percentage",      "月額管理費の分配（".($i+1)."行目）：割合(%)を入力してください。");
+        }
+
+        // --- 分配％の合計チェック（0 or 100） ---
+        $percentTotal = $allocNonEmpty->sum(fn ($r) => (int)($r['percentage'] ?? 0));
+        if ($percentTotal !== 0 && $percentTotal !== 100) {
+            $v->errors()->add('will_allocations', '月額管理費の分配の合計％は 0 または 100 にしてください。');
+        }
+    });
+
+    // ★ここでまとめて確定（失敗したら自動で back + errors）
     $data = $validator->validate();
 
-    // ▼ ③ 行追加系：空行除去（今まで通り）
-// ▼ ③ 行追加系：空行除去（PCN）
-$data['pcn_items'] = collect($data['pcn_items'] ?? [])
-    ->filter(function ($row) {
-        // 何か1つでも入力されているか
-        $hasAny = filled($row['category'] ?? null)
-               || filled($row['title'] ?? null)
-               || filled($row['months_before'] ?? null);
-
-        if (!$hasAny) {
-            // 完全空行は捨てる
-            return false;
-        }
-
-        // 何か入力してあるのに months_before が空欄なら、その行も捨てる
-        if (!filled($row['months_before'] ?? null)) {
-            return false;
-        }
-
-        return true;
-    })
-    ->map(function ($row) {
-        // months_before を必ず int にしておく
-        $row['months_before'] = (int)($row['months_before'] ?? 0);
-        return $row;
-    })
-    ->values()
-    ->all();
+    // ▼ 以降：保存前の「完全空行だけ」除去（途中入力はもうここに来ない）
+    $data['pcn_items'] = collect($data['pcn_items'] ?? [])
+        ->filter(fn ($r) => filled($r['category'] ?? null) || filled($r['title'] ?? null) || filled($r['months_before'] ?? null))
+        ->map(function ($r) {
+            $r['months_before'] = (int)($r['months_before'] ?? 0);
+            return $r;
+        })
+        ->values()->all();
 
     $data['other_requirements'] = collect($data['other_requirements'] ?? [])
-        ->filter(function ($row) {
-            return filled($row['content'] ?? null)
-                || filled($row['responsible_employee_number'] ?? null);
-        })
-        ->values()
-        ->all();
+        ->filter(fn ($r) => filled($r['content'] ?? null) || filled($r['responsible_employee_number'] ?? null) || filled($r['responsible_label'] ?? null))
+        ->values()->all();
 
     $data['will_allocations'] = collect($data['will_allocations'] ?? [])
-        ->filter(function ($row) {
-            return filled($row['employee_number'] ?? null)
-                || filled($row['percentage'] ?? null);
-        })
-        ->values()
-        ->all();
+        ->filter(fn ($r) => filled($r['employee_number'] ?? null) || filled($r['employee_name'] ?? null) || filled($r['percentage'] ?? null))
+        ->values()->all();
+
+
 
     // ▼ ④ Will分配の合計％チェック
     $percentTotal = collect($data['will_allocations'])
@@ -215,6 +251,13 @@ DB::transaction(function () use ($currentUser, $data, $salesUser, $nextManageNo)
         // 関連Q-WEB（あれば）
         'related_qweb' => request()->input('related_qweb'),
     ]);
+
+    if (method_exists($case, 'comments')) {
+    $case->comments()->create([
+        'body'    => "【登録】\n案件を登録しました。",
+        'user_id' => auth()->id(), // もしくは $currentUser->id
+    ]);
+}
 
     // --- 情報共有者 ---
     foreach ($data['shared_employee_numbers'] ?? [] as $empNo) {
@@ -451,14 +494,18 @@ $pcnCategoryDefs = [
         });
     }
 
-    // キーワード検索
-    if ($keyword !== '') {
-        $query->where(function ($inner) use ($keyword) {
-            $inner->where('cweb_cases.manage_no', 'like', "%{$keyword}%")
-                  ->orWhere('cweb_cases.customer_name', 'like', "%{$keyword}%")
-                  ->orWhere('sales.name', 'like', "%{$keyword}%");
-        });
-    }
+if ($keyword !== '') {
+    $kw = mb_strtolower($keyword, 'UTF-8'); // 文字を小文字に統一（英数字向け）
+
+    $query->where(function ($inner) use ($kw) {
+        $inner->whereRaw('LOWER(cweb_cases.manage_no) LIKE ?', ["%{$kw}%"])
+              ->orWhereRaw('LOWER(cweb_cases.customer_name) LIKE ?', ["%{$kw}%"])
+              ->orWhereRaw('LOWER(sales.name) LIKE ?', ["%{$kw}%"]);
+              // 必要なら追加：製品でも検索したい場合
+              // ->orWhereRaw('LOWER(cweb_cases.product_group) LIKE ?', ["%{$kw}%"])
+              // ->orWhereRaw('LOWER(cweb_cases.product_code) LIKE ?', ["%{$kw}%"]);
+    });
+}
 
     // ステータス絞り込み
     if ($status !== '') {

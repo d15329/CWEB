@@ -27,6 +27,7 @@
         </button>
     </div>
 
+    
     {{-- ユーザー名＋（編集中）タグ --}}
     @auth
         <button type="button" class="cweb-header-user-toggle">
@@ -602,7 +603,8 @@
 </style>
 
 
-    <form method="POST" action="{{ route('cweb.cases.store') }}">
+    <form id="case-form" method="POST" action="{{ route('cweb.cases.store') }}">
+
         @csrf
 
         {{-- 登録ボタン（スクロールしても上に固定） --}}
@@ -1911,7 +1913,99 @@ function closeSuccessModal() {
     window.location.href = "{{ route('cweb.cases.index') }}";
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('case-form');
+  if (!form) return;
+
+  const isFilled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
+
+  form.addEventListener('submit', (e) => {
+    const messages = [];
+
+    // ===== PCN管理項目（行単位：どれか入れたら全部必須） =====
+    document.querySelectorAll('#pcn-rows .pcn-row').forEach((row, idx) => {
+      const sel   = row.querySelector('select[name*="[category]"]');
+      const title = row.querySelector('input[name*="[title]"]');
+      const month = row.querySelector('input[name*="[months_before]"]');
+
+      const vCat   = sel?.value ?? '';
+      const vTitle = title?.value ?? '';
+      const vMonth = month?.value ?? '';
+
+      const hasAny = isFilled(vCat) || isFilled(vTitle) || isFilled(vMonth);
+      if (!hasAny) return;
+
+      if (!isFilled(vCat))   messages.push(`PCN管理項目（${idx+1}行目）：区分を選択してください。`);
+      if (!isFilled(vTitle)) messages.push(`PCN管理項目（${idx+1}行目）：ラベル変更などを入力してください。`);
+      if (!isFilled(vMonth)) messages.push(`PCN管理項目（${idx+1}行目）：ヵ月前連絡を入力してください。`);
+    });
+
+    // ===== その他要求（行単位：どれか入れたら全部必須） =====
+    document.querySelectorAll('#other-rows .other-row').forEach((row, idx) => {
+      const content = row.querySelector('textarea[name*="[content]"]');
+      const respNo  = row.querySelector('input[type="hidden"][name*="[responsible_employee_number]"]');
+
+      const vContent = content?.value ?? '';
+      const vRespNo  = respNo?.value ?? '';
+
+      const hasAny = isFilled(vContent) || isFilled(vRespNo);
+      if (!hasAny) return;
+
+      if (!isFilled(vContent)) messages.push(`その他要求（${idx+1}行目）：要求内容を入力してください。`);
+      if (!isFilled(vRespNo))  messages.push(`その他要求（${idx+1}行目）：対応者を選択してください。`);
+    });
+
+    // ===== Will（登録費/月額：片方入れたら両方必須） =====
+    const willInit    = form.querySelector('input[name="will_initial"]')?.value ?? '';
+    const willMonthly = form.querySelector('input[name="will_monthly"]')?.value ?? '';
+    const hasAnyWill  = isFilled(willInit) || isFilled(willMonthly);
+
+    if (hasAnyWill) {
+      if (!isFilled(willInit))    messages.push('Will：登録費を入力してください（片方だけは不可）。');
+      if (!isFilled(willMonthly)) messages.push('Will：月額を入力してください（片方だけは不可）。');
+    }
+
+    // ===== 月額管理費の分配（行単位 + 合計0 or 100） =====
+    let totalPct = 0;
+    let hasAlloc = false;
+
+    document.querySelectorAll('#will-rows .will-row').forEach((row, idx) => {
+      const empNo = row.querySelector('input[type="hidden"][name*="[employee_number]"]')?.value ?? '';
+      const empNm = row.querySelector('input[type="hidden"][name*="[employee_name]"]')?.value ?? '';
+      const pctEl = row.querySelector('input[name*="[percentage]"]');
+      const pct   = pctEl?.value ?? '';
+
+      const hasAny = isFilled(empNo) || isFilled(empNm) || isFilled(pct);
+      if (!hasAny) return;
+
+      hasAlloc = true;
+
+      if (!isFilled(empNo)) messages.push(`月額管理費の分配（${idx+1}行目）：担当者を選択してください。`);
+      if (!isFilled(empNm)) messages.push(`月額管理費の分配（${idx+1}行目）：担当者名が未設定です（再選択してください）。`);
+      if (!isFilled(pct))   messages.push(`月額管理費の分配（${idx+1}行目）：割合(%)を入力してください。`);
+
+      totalPct += parseInt(pct || '0', 10);
+    });
+
+    if (hasAlloc && totalPct !== 0 && totalPct !== 100) {
+      messages.push('月額管理費の分配：合計％は 0 または 100 にしてください。');
+    }
+
+    // ===== アラートして送信停止 =====
+    if (messages.length > 0) {
+      e.preventDefault();
+      alert("入力エラーがあります。\n\n" + messages.join("\n"));
+    }
+  });
+});
 
 </script>
+
+@if ($errors->any())
+<script>
+  const errors = @json($errors->all());
+  alert("入力エラーがあります。\n\n" + errors.join("\n"));
+</script>
+@endif
 
 @endsection

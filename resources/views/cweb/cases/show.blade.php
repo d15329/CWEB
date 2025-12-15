@@ -6,15 +6,18 @@
     <div class="cweb-header-inner">
 
         <div class="cweb-header-left">
-<a href="{{ route('cweb.cases.index') }}" class="cweb-brand-link">
+            <a href="{{ route('cweb.cases.index') }}" class="cweb-brand-link">
                 C-WEB
             </a>
 
-            {{-- 管理番号 --}}
+            {{-- 管理番号 + ステータス --}}
             <div style="font-weight:700;margin-left:12px;">
                 {{ $case->manage_no }}
+                <span style="margin-left:6px;font-weight:700;">
+                    ({{ $statusLabel }})
+                </span>
             </div>
-        </div>
+        </div> 
 
         <div class="cweb-header-right">
             <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
@@ -27,6 +30,7 @@
     </div>
 </header>
 @endsection
+
 
 @section('content')
 
@@ -508,18 +512,21 @@
                 onclick="goEditPage()">
             編集
         </button>
+                @if(($case->status ?? '') !== 'closed')
         <button type="button"
                 class="cweb-submit-button cweb-btn-delete"
                 onclick="openDeleteModal()">
             廃止
         </button>
+              @endif
     </div>
 
-    <div class="cweb-submit-bar-right">
-        <button type="button" class="cweb-submit-button cweb-btn-folder">
-            フォルダ
-        </button>
-    </div>
+<button type="button"
+        class="cweb-submit-button cweb-btn-folder"
+        onclick="copyFolderPath()">
+    フォルダ
+</button>
+
 </div>
 
 <div class="cweb-case-layout">
@@ -976,6 +983,50 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+
+function copyFolderPath() {
+    const path = "\\\\ftktake01\\QWeb_Data\\Specification\\{{ $case->manage_no }}";
+
+    // Clipboard API（HTTPS / localhost向け）
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(path)
+            .then(() => {
+                // 成功時：何もしない
+            })
+            .catch(() => {
+                alert("フォルダが存在しません。");
+            });
+        return;
+    }
+
+    // フォールバック（http等でも動く可能性あり）
+    fallbackCopy(path);
+}
+
+function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+
+    let ok = false;
+    try {
+        ok = document.execCommand('copy');
+    } catch (e) {
+        ok = false;
+    } finally {
+        document.body.removeChild(ta);
+    }
+
+    if (!ok) {
+        alert("フォルダが存在しません。");
+    }
+}
 </script>
 
 @endsection

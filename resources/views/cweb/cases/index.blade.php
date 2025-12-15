@@ -36,6 +36,13 @@
 </header>
 
 <script>
+function openCategoryImage() {
+    // Laravel の asset() で URL を生成
+    const url = "{{ asset('images/images_C.png') }}";
+    // 新しいタブで開く
+    window.open(url, '_blank');
+}
+
 function showSuccessModal() {
     const overlay = document.getElementById('success-modal-overlay');
     const modal   = document.getElementById('success-modal');
@@ -266,7 +273,7 @@ document.addEventListener('click', function (e) {
 @endphp
 
 <div style="background:#ffffff;border-radius:8px;border:1px solid #e5e7eb;">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead>
         <tr style="background:#f3f4f6;">
             {{-- 管理番号（ソート付） --}}
@@ -430,10 +437,7 @@ document.addEventListener('click', function (e) {
                        border:1px solid #9ca3af;">
                 営業窓口
             </th>
-            <th style="padding:8px 10px;text-align:center;font-weight:700;
-                       border:1px solid #9ca3af;">
-                費用負担
-            </th>
+
             <th style="padding:8px 10px;text-align:center;font-weight:700;
                        border:1px solid #9ca3af;">
                 月額費用
@@ -508,11 +512,6 @@ document.addEventListener('click', function (e) {
             @endif
         </td>
 
-        {{-- コスト負担コード --}}
-        <td style="padding:6px 10px;color:#111827;text-align:center;">
-            {{ $case->cost_responsible_code ?? '' }}
-        </td>
-
         {{-- 月額Will金額 --}}
         <td style="padding:6px 10px;color:#111827;text-align:center;">
             {{ $case->will_monthly_cost ? number_format($case->will_monthly_cost) : '-' }}
@@ -520,7 +519,7 @@ document.addEventListener('click', function (e) {
     </tr>
 @empty
     <tr>
-        <td colspan="8" style="padding:10px 10px;color:#6b7280;text-align:center;">
+        <td colspan="7" style="padding:10px 10px;color:#6b7280;text-align:center;">
             まだ案件がありません。
         </td>
     </tr>
