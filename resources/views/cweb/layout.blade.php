@@ -326,6 +326,35 @@ textarea::placeholder {
     color:#9ca3af;
 }
 
+/* ===== 登録完了ポップアップ（必ず画面中央） ===== */
+#success-modal-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: none;                 /* showSuccessModal() で flex */
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.85);
+  padding: 16px;
+}
+
+#success-modal{
+  width: min(520px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 12px;
+  box-shadow: 1px 3px 15px rgba(0,0,0,.35);
+  padding: 1.2rem 1.3rem 1rem;
+}
+#success-modal .header{
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+
     </style>
 </head>
 <body>
@@ -337,19 +366,7 @@ textarea::placeholder {
     <main class="cweb-main">
         @yield('content')
 
-        <div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
 
-        <div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
-            <div class="header">{{ __('cweb.modal.done_title') }}</div>
-            <div class="content" style="text-align:center; font-size:16px; padding:20px;">
-                {{ __('cweb.modal.saved') }}
-            </div>
-            <div class="actions" style="text-align:center;">
-                <button type="button" class="ui blue button" onclick="closeSuccessModal()">
-                    {{ __('cweb.common.ok') }}
-                </button>
-            </div>
-        </div>
 
     <!-- <script>
         function showSuccessModal() {
@@ -377,6 +394,35 @@ textarea::placeholder {
         }
     </script> -->
     </main>
+<div id="success-modal-overlay">
+  <div id="success-modal">
+    <div class="header">{{ __('cweb.modal.done_title') }}</div>
+
+    <div class="content" style="text-align:center; font-size:16px; padding:20px;">
+      {{ __('cweb.modal.saved') }}
+    </div>
+
+    <div class="actions" style="text-align:center;">
+      <button type="button" class="btn btn-qweb" onclick="closeSuccessModal()">
+        {{ __('cweb.common.ok') }}
+      </button>
+    </div>
+  </div>
+</div>
+<script>
+function showSuccessModal() {
+  const overlay = document.getElementById('success-modal-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSuccessModal() {
+  const overlay = document.getElementById('success-modal-overlay');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+</script>
 
 </body>
 </html>

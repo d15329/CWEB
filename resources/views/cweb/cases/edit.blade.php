@@ -1,42 +1,57 @@
 @extends('cweb.layout')
 
 @section('header')
+@php
+    $currentLocale = request()->route('locale') ?? app()->getLocale();
+    $nextLocale = $currentLocale === 'ja' ? 'en' : 'ja';
+
+    // locale は query に混ざってても無視
+    $query = request()->except('locale');
+
+    $switchUrl = route('cweb.cases.edit', array_merge(
+        $query,
+        ['locale' => $nextLocale, 'case' => $case->id]
+    ));
+@endphp
+
+
 <header class="cweb-header">
-    <div class="cweb-header-inner">
+  <div class="cweb-header-inner">
+    <div class="cweb-header-left">
+      <a href="{{ route('cweb.cases.index', ['locale' => $currentLocale]) }}" class="cweb-brand-link">C-WEB</a>
 
-        <div class="cweb-header-left">
-            <a href="{{ route('cweb.cases.index') }}" class="cweb-brand-link">
-                C-WEB
-            </a>
-
-            {{-- 管理番号（編集対象の案件） ※ (登録中) を付与 --}}
-            <div style="font-weight:700;margin-left:12px;">
-                {{ $case->manage_no }}<span style="font-size:13px;margin-left:2px;">(編集中)</span>
-            </div>
-        </div>
-
-        <div class="cweb-header-right">
-            <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
-
-            {{-- 日本語 / EN を1つのボタンにしてヘッダー縦線で区切る --}}
-            <div class="cweb-header-lang">
-                <button type="button"
-                        class="cweb-header-lang-toggle"
-                        data-lang="ja-en">
-                    日本語 / EN
-                </button>
-            </div>
-
-            @auth
-                <button type="button" class="cweb-header-user-toggle">
-                    {{ auth()->user()->name }}
-                </button>
-            @endauth
-        </div>
-
+      <div style="font-weight:700;margin-left:12px;">
+        {{ $case->manage_no }}
+        <span style="font-size:13px;margin-left:2px;">
+          ({{ __('cweb.labels.editing') }})
+        </span>
+      </div>
     </div>
+
+    <div class="cweb-header-right">
+      <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
+
+      <div class="cweb-header-lang">
+        <a href="{{ $switchUrl }}" class="cweb-header-lang-toggle" style="text-decoration:none;">
+          {{ $currentLocale === 'ja' ? 'EN' : '日本語' }}
+        </a>
+        
+      </div>
+
+      @auth
+        <button type="button" class="cweb-header-user-toggle">
+          {{ auth()->user()->name }}
+        </button>
+        {{-- debug --}}
+<div style="font-size:12px;color:#fca5a5;">{{ $switchUrl }}</div>
+
+      @endauth
+    </div>
+  </div>
 </header>
 @endsection
+
+
 
 @section('content')
 
@@ -47,13 +62,12 @@
     font-weight: 700;
 }
 
-
 .cweb-search-group{
-    margin: 0;        /* ← これが重要 */
-    padding: 0;       /* 必要なら */
+    margin: 0;
+    padding: 0;
     display: flex;
     align-items: center;
-    gap: 8px; /* input と ボタンの間の余白 */
+    gap: 8px;
 }
 
 .cweb-search-group input{
@@ -68,48 +82,30 @@
     background: #2185d0;
     color: #fff;
     border: none;
-
-    /* ▼ 横幅を少しだけ小さく */
     padding: .55em 0.7em;
-
     border-radius: .285rem;
     cursor: pointer;
-
-    /* ▼ 文字を完全中央に配置 */
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 1px;
-
     font-size: 0.8em;
     font-weight: 600;
 }
-
-.cweb-search-btn:hover{
-    background: #1678c2;
-}
+.cweb-search-btn:hover{ background: #1678c2; }
 
 /* =========================
    モーダル本体（.ui.modal 系）
    ========================= */
-
-/* =========================
-   モーダル本体（.ui.modal 系）
-   ========================= */
-
 .ui.modal {
     position: fixed;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.9);  /* ★ 最初は少し小さく */
-    opacity: 0;                                    /* ★ 最初は透明 */
-
-    /* ★ display は常に block にしておく */
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0;
     display: block;
-    pointer-events: none;                          /* ★ 非表示時はクリックさせない */
-
+    pointer-events: none;
     z-index: 1001;
-
     text-align: left;
     background: #fff;
     border: none;
@@ -125,81 +121,60 @@
     font-size: 1rem;
     padding: 1.2rem 1.3rem 1rem;
     box-sizing: border-box;
-
-    /* ★ アニメーション */
     transition: transform .22s ease-out, opacity .22s ease-out;
     will-change: transform, opacity;
 }
 
-
-/* サイズ：large ＋ 通常モーダルの幅 */
 @media only screen and (min-width: 768px) {
     .ui.modal:not(.fullscreen),
     .ui.large.modal {
         width: 88%;
         margin: 0;
-        max-width: 900px;  /* 好きな最大幅にしてOK */
+        max-width: 900px;
     }
 }
 
-/* 開いているとき（visible + active が付いた状態） */
-/* 開いているとき（visible + active が付いた状態） */
 .ui.modal.visible.active {
-    /* display はそのまま block のまま */
-    transform: translate(-50%, -50%) scale(1);  /* ★ 通常サイズ */
-    opacity: 1;                                 /* ★ 不透明に */
-    pointer-events: auto;                       /* ★ クリック可能に */
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    pointer-events: auto;
 }
 
-/* モーダル内のスクロール領域 */
 .ui.modal > .scrolling.content {
     max-height: calc(80vh - 110px);
     overflow-y: auto;
 }
 
-/* ヘッダーとフッター */
-.ui.modal > .header {
-    font-weight: 700;
-    margin-bottom: .75rem;
-}
+.ui.modal > .header { font-weight: 700; margin-bottom: .75rem; }
 .ui.modal > .actions {
     margin-top: 1rem;
     padding-top: .75rem;
     border-top: 1px solid rgba(34, 36, 38, .15);
     text-align: right;
 }
-/* モーダルタイトル下の青い横線 */
 .ui.modal > .header.title_boader{
-    font-size: 30px;                /* ★タイトルを少し大きく */
+    font-size: 30px;
     font-weight: 700;
     color: #1b1c1d;
     margin-bottom: .75rem;
     padding-bottom: .4rem;
-    border-bottom: 2px solid #2185d0;  /* ★青線：色と太さをここに統一 */
+    border-bottom: 2px solid #2185d0;
 }
-/* SearchResult / Selected のラベル下の青い横線 */
-/* SearchResult / Selected ラベル下の青線 */
 .emp_l_s{
-    height: 1px;               /* ★タイトルと同じ太さ */
-    background: #2185d0;       /* ★同じ青 */
+    height: 1px;
+    background: #2185d0;
     margin: .2rem 0 .6rem;
 }
-
-.scrolling.content > *:first-child{
-    margin-top: 0 !important;
-}
+.scrolling.content > *:first-child{ margin-top: 0 !important; }
 
 /* =========================
    Dimmer（背景の黒いオーバーレイ）
    ========================= */
-
 .ui.dimmer {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     text-align: center;
     vertical-align: middle;
     padding: 1em;
@@ -218,8 +193,6 @@
     will-change: opacity;
     z-index: 1000;
 }
-
-/* 表示状態 */
 .ui.dimmer.visible.active {
     display: flex;
     opacity: 1;
@@ -228,7 +201,6 @@
 /* =========================
    ボタン（.ui.button 系）
    ========================= */
-
 .ui.button {
     display: inline-block;
     min-height: 0;
@@ -243,36 +215,14 @@
     cursor: pointer;
     line-height: 1em;
 }
-.ui.button:hover {
-    background: #cacbcd;
-    color: rgba(0, 0, 0, .8);
-}
-
-/* OK（.positive）＝ 緑ボタン */
-.ui.positive.button {
-    background: #21ba45;
-    color: #fff;
-}
-.ui.positive.button:hover {
-    background: #16ab39;
-    color: #fff;
-}
-
-/* Cancel はデフォのグレーのまま */
-.ui.button.cancel {
-    /* 必要ならここで別色指定も可能 */
-}
+.ui.button:hover { background: #cacbcd; color: rgba(0, 0, 0, .8); }
+.ui.positive.button { background: #21ba45; color: #fff; }
+.ui.positive.button:hover { background: #16ab39; color: #fff; }
 
 /* =========================
    入力ボックス（.ui.icon.input）まわり
    ========================= */
-
-/* アイコン付き入力全体（これは今のままでOK） */
-.ui.icon.input{
-    position: relative;
-    display: inline-block;
-}
-
+.ui.icon.input{ position: relative; display: inline-block; }
 .ui.icon.input > input{
     padding-right: 2.4em;
     border: 1px solid rgba(34,36,38,.15);
@@ -284,344 +234,111 @@
 
 /* ▼ 青い丸ボタンを明示的に復活させる */
 .ui.icon.input > i.inverted.circular.search.link.icon.blue{
-    position: absolute;              /* input の中の右端に固定 */
+    position: absolute;
     right: .6em;
     top: 50%;
     transform: translateY(-50%);
-
-    background: #2185d0;             /* 青い背景（Semantic UI の青） */
-    border-radius: 999px;            /* 丸ボタンにする */
-
+    background: #2185d0;
+    border-radius: 999px;
     width: 1.8em;
     height: 1.8em;
-
     display: flex;
     align-items: center;
     justify-content: center;
-
-    color: transparent;              /* 元のフォントアイコンは見えなくしておく */
+    color: transparent;
 }
-
-/* ▼ 白い円（ルーペ部分） */
 .ui.icon.input > i.inverted.circular.search.link.icon.blue::before{
     content: "";
     display: block;
-    width: 11px;                     /* 少し小さめの円 */
+    width: 11px;
     height: 11px;
-    border: 2px solid #fff;          /* 白い線の円 */
+    border: 2px solid #fff;
     border-radius: 50%;
 }
-
-/* ▼ 棒（円の外側右下にくっつく） */
 .ui.icon.input > i.inverted.circular.search.link.icon.blue::after{
     content: "";
     position: absolute;
-    width: 7px;                      /* 長めの棒 */
+    width: 7px;
     height: 2px;
     background: #fff;
     border-radius: 1px;
-
-    /* 円の外側右下にくっつくような位置調整 */
     right: 4px;
     bottom: 4px;
     transform-origin: left center;
     transform: rotate(45deg);
 }
 
-
-
-
 /* =========================
-   Grid（.ui.two.column.grid）ざっくり
+   Grid（.ui.two.column.grid）
    ========================= */
+.ui.grid { display: flex; flex-direction: column; margin-top: 1rem; }
+.ui.grid .row { display: flex; width: 100%; }
+.ui.grid .column { flex: 1 0 0; padding-right: 1rem; }
+.ui.grid .column:last-child { padding-right: 0; }
 
-.ui.grid {
-    display: flex;
-    flex-direction: column;
-    margin-top: 1rem;
-}
-.ui.grid .row {
-    display: flex;
-    width: 100%;
-}
-.ui.grid .column {
-    flex: 1 0 0;
-    padding-right: 1rem;
-}
-.ui.grid .column:last-child {
-    padding-right: 0;
-}
+/* ★ ヘッダーと登録ボタンの隙間をなくす調整 */
+.cweb-header{ margin-bottom: 0 !important; padding-bottom: 0 !important; }
+form{ margin-top:0; padding-bottom: 0 }
 
-    /* 送信バー（前回のまま使う想定） */
-
-    /* ★ ヘッダーと登録ボタンの隙間をなくす調整 */
-.cweb-header{
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-}
-
-    form{
-        margin-top:0;
-         padding-bottom: 0
-    }
 .cweb-submit-bar{
-    position: fixed;          /* ← ここを fixed にして完全固定 */
-    top: 45px;                /* ← ヘッダーの高さに合わせて調整（必要なら 56px とかに変更） */
+    position: fixed;
+    top: 45px;
     left: 0;
     right: 0;
-
-    z-index: 45;              /* ヘッダーより少し低く / コンテンツよりは高く */
-    background: var(--bg);    /* 画面の背景と同じ色でなじませる */
-    padding: 8px 24px;        /* コンテンツ左右の余白に合わせて調整 */
-
+    z-index: 45;
+    background: var(--bg);
+    padding: 8px 24px;
     display: flex;
     justify-content: flex-start;
     align-items: center;
 }
-    .cweb-submit-button{
-        background:#f97316;
-        color:#fff;
-        border:none;
-        padding:10px 32px;
-        border-radius:999px;
-        font-weight:700;
-        font-size:14px;
-        box-shadow:0 4px 8px rgba(0,0,0,0.35);
-        cursor:pointer;
-    }
-    .cweb-submit-button:hover{
-        opacity:0.9;
-        transform:translateY(-1px);
-    }
-    .cweb-submit-button:active{
-        transform:translateY(0);
-        box-shadow:0 2px 4px rgba(0,0,0,0.25);
-    }
+.cweb-submit-button{
+    background:#f97316;
+    color:#fff;
+    border:none;
+    padding:10px 32px;
+    border-radius:999px;
+    font-weight:700;
+    font-size:14px;
+    box-shadow:0 4px 8px rgba(0,0,0,0.35);
+    cursor:pointer;
+}
+.cweb-submit-button:hover{ opacity:0.9; transform:translateY(-1px); }
+.cweb-submit-button:active{ transform:translateY(0); box-shadow:0 2px 4px rgba(0,0,0,0.25); }
 
+.scrolling.content{
+    overflow-y: auto;
+    max-height: calc(80vh - 110px);
+    padding-top: 0 !important;
+}
 
-    .scrolling.content{
-        overflow-y: auto;
-        max-height: calc(80vh - 110px); /* ヘッダー/ボタン分を引いておくイメージ */
-        padding-top: 0 !important;
-    }
-
-    /* ヘッダーの文字等（既存の .header.title_boader はそのまま使う前提） */
-    .cweb-modal-inner .header{
-        font-weight: 700;
-        margin-bottom: .75rem;
-    }
-
-    /* ====== フッター（OK / Cancel ボタン行） ====== */
-
-    .cweb-modal-inner .actions{
-        margin-top: 1rem;
-        padding-top: .75rem;
-        border-top: 1px solid rgba(34,36,38,.15);
-        text-align: right;
-    }
-
-    /* Semantic UI の .ui.button 風 */
-    .cweb-modal-inner .actions .ui.button{
-        display: inline-block;
-        min-height: 0;
-        padding: .6em 1.1em;
-        margin-left: .4em;
-        font-size: .85714286rem;
-        font-weight: 700;
-        border-radius: .28571429rem;
-        border: none;
-        background: #e0e1e2;
-        color: rgba(0,0,0,.6);
-        cursor: pointer;
-        line-height: 1em;
-    }
-    .cweb-modal-inner .actions .ui.button:hover{
-        background: #cacbcd;
-    }
-
-    /* OKボタン（.positive） → 緑 */
-    .cweb-modal-inner .actions .ui.positive.button{
-        background: #21ba45;
-        color: #fff;
-    }
-    .cweb-modal-inner .actions .ui.positive.button:hover{
-        background: #16ab39;
-        color:#fff;
-    }
-
-    /* Cancel はグレーのまま（必要なら .cancel に別色も付けられる） */
-    .cweb-modal-inner .actions .ui.button.cancel{
-        /* デフォのグレーでよければ何も書かなくてOK */
-    }
-    @media only screen and (min-width: 768px){
-        /* .ui.large.modal / .ui.modal:not(.fullscreen) の width:88% に寄せる */
-        .cweb-modal-inner{
-            width: 88%;
-            max-width: none;
-            margin: 0;
-        }
-    }
-
-    .picker-title{
-        font-size:16px;
-        font-weight:700;
-        color:var(--text);
-        padding-bottom:6px;
-        border-bottom:2px solid #3b82f6; /* 青線 */
-        margin-bottom:4px;
-    }
-    .picker-search-row{
-        display:flex;
-        align-items:center;
-        gap:8px;
-        margin-bottom:4px;
-    }
-    .picker-search-input{
-        flex:1;
-        padding:6px 8px;
-        border-radius:4px;
-        border:1px solid #9ca3af;
-        font-size:12px;
-    }
-    .picker-search-btn{
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        padding:6px 10px;
-        border-radius:4px;
-        border:none;
-        background:#0ea5e9;
-        color:#fff;
-        cursor:pointer;
-        font-size:12px;
-        font-weight:600;
-        min-width:34px;
-    }
-    .picker-search-btn-icon{
-        width:14px;
-        height:14px;
-        border-radius:999px;
-        border:2px solid #fff;
-        position:relative;
-    }
-    .picker-search-btn-icon::after{
-        content:"";
-        position:absolute;
-        width:7px;
-        height:2px;
-        border-radius:999px;
-        background:#fff;
-        right:-5px;
-        bottom:-2px;
-        transform:rotate(35deg);
-    }
-
-    .picker-header-row{
-        display:flex;
-        gap:12px;
-        font-size:12px;
-        font-weight:700;
-        color:var(--text);
-        margin-top:4px;
-    }
-    .picker-col-header{
-        flex:1;
-    }
-    .picker-body-row{
-        display:flex;
-        gap:12px;
-        flex:1;
-        min-height:180px;
-        max-height:45vh;
-    }
-    .picker-list{
-        flex:1;
-        border:1px solid #e5e7eb;
-        border-radius:4px;
-        overflow:auto;
-        background:var(--bg);
-        font-size:12px;
-    }
-    .picker-item{
-        padding:4px 8px;
-        border-bottom:1px solid #e5e7eb;
-        cursor:pointer;
-        display:flex;
-        justify-content:space-between;
-        gap:6px;
-    }
-    .picker-item:hover{
-        background:rgba(37,99,235,0.08);
-    }
-    .picker-item-main{
-        font-weight:700;
-        color:var(--text);
-    }
-    .picker-item-sub{
-        font-size:11px;
-        color:#6b7280;
-    }
-
-    .picker-footer{
-        display:flex;
-        justify-content:flex-end;
-        gap:8px;
-        margin-top:6px;
-    }
-    .picker-btn-ok{
-        background:#16a34a;
-        color:#fff;
-        border:none;
-        padding:6px 18px;
-        border-radius:999px;
-        font-weight:700;
-        font-size:12px;
-        cursor:pointer;
-    }
-    .picker-btn-cancel{
-        background:#e5e7eb;
-        color:#374151;
-        border:none;
-        padding:6px 18px;
-        border-radius:999px;
-        font-weight:700;
-        font-size:12px;
-        cursor:pointer;
-    }
-
-    /* ===========================
-   ▼ ヘッダー（日本語/EN・ユーザー名）
-   =========================== */
-
-/* 右側のまとまり（Q-WEB・言語・ユーザー名） */
+/* 右側（Q-WEB・言語・ユーザー名） */
 .cweb-header-right {
     display: flex;
     align-items: center;
     gap: 12px;
-    color: #e5e7eb;  /* ヘッダー右側文字色 */
+    color: #e5e7eb;
 }
 
-/* 言語ブロック（「日本語 / EN」） */
+/* 言語ブロック */
 .cweb-header-lang {
     position: relative;
     display: inline-flex;
     align-items: center;
     margin-left: 8px;
-    padding-left: 12px;  /* 左に縦線ぶんの余白 */
+    padding-left: 12px;
 }
-
-/* 言語ブロック左に、ヘッダー帯を縦に割る線を入れる */
 .cweb-header-lang::before {
     content: "";
     position: absolute;
     left: 0;
-    top: -6px;     /* 上下にはみ出させて「がっつり」見せる */
+    top: -6px;
     bottom: -6px;
     width: 1px;
     background: rgba(148, 163, 184, 0.6);
 }
 
-/* 日本語 / EN ボタン */
+/* 日本語/EN ボタン */
 .cweb-header-lang-toggle {
     border: none;
     background: transparent;
@@ -630,18 +347,15 @@
     cursor: pointer;
     padding: 0 6px;
     line-height: 1.4;
-    opacity: 0.75;                  /* ちょい薄め */
-    transition:
-        opacity .15s ease,
-        background-color .15s ease,
-        transform .04s ease;
+    opacity: 0.75;
+    transition: opacity .15s ease, background-color .15s ease, transform .04s ease;
 }
 
 /* ユーザー名ボタン */
 .cweb-header-user-toggle {
     position: relative;
     margin-left: 8px;
-    padding-left: 12px;             /* 左に縦線ぶんの余白 */
+    padding-left: 12px;
     border: none;
     background: transparent;
     color: inherit;
@@ -649,13 +363,8 @@
     cursor: pointer;
     line-height: 1.4;
     opacity: 0.75;
-    transition:
-        opacity .15s ease,
-        background-color .15s ease,
-        transform .04s ease;
+    transition: opacity .15s ease, background-color .15s ease, transform .04s ease;
 }
-
-/* ユーザー名の左にも縦線 */
 .cweb-header-user-toggle::before {
     content: "";
     position: absolute;
@@ -666,29 +375,41 @@
     background: rgba(148, 163, 184, 0.6);
 }
 
-/* ホバー時：少し濃く & ほんのり背景 */
 .cweb-header-lang-toggle:hover,
 .cweb-header-user-toggle:hover {
     opacity: 1;
     background-color: rgba(255, 255, 255, 0.06);
 }
-
-/* クリック時：ちょっとだけ縮む */
 .cweb-header-lang-toggle:active,
-.cweb-header-user-toggle:active {
-    transform: scale(0.97);
+.cweb-header-user-toggle:active { transform: scale(0.97); }
+
+@media (prefers-color-scheme: dark) {
+    .cweb-header-right { color: #e5e7eb; }
+    .cweb-header-lang::before,
+    .cweb-header-user-toggle::before { background: rgba(75, 85, 99, 0.8); }
 }
 
-/* ダークモード調整 */
-@media (prefers-color-scheme: dark) {
-    .cweb-header-right {
-        color: #e5e7eb;
-    }
-    .cweb-header-lang::before,
-    .cweb-header-user-toggle::before {
-        background: rgba(75, 85, 99, 0.8);
-    }
+/* ★ヘッダー崩れ対策：左右を分離して右側を右寄せ固定 */
+.cweb-header-inner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  width:100%;
+  gap:12px;
 }
+.cweb-header-left{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+.cweb-header-right{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-left:auto;
+}
+.cweb-header-left span{ opacity: 1; }
 
 </style>
 
@@ -727,15 +448,16 @@
     if ($case->category_other ?? false)    $defaultCategories[] = 'other';
 @endphp
 
-<form method="POST" action="{{ route('cweb.cases.update', $case) }}">
+<form method="POST" action="{{ route('cweb.cases.update', ['locale' => request()->route('locale'), 'case' => $case->id]) }}">
+
+
     @csrf
     @method('PUT')
 
     {{-- 更新ボタン（スクロールしても上に固定） --}}
     <div class="cweb-submit-bar">
-        <button type="submit"
-                class="btn btn-accent cweb-submit-button">
-            更新
+        <button type="submit" class="btn btn-accent cweb-submit-button">
+            {{ __('cweb.actions.update') }}
         </button>
     </div>
 
@@ -765,7 +487,7 @@
             {{-- 1行目：営業窓口（必須） --}}
             <tr style="{{ $rowStyle }}">
                 <td style="{{ $labelCell }}">
-                    <span style="color:red;">＊</span>営業窓口
+                    <span style="color:red;">＊</span>{{ __('cweb.form.sales_contact') }}
                 </td>
                 <td style="{{ $inputCell }}">
 
@@ -784,21 +506,15 @@
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 
                         {{-- 保存用フィールド --}}
-                        <input type="hidden"
-                               name="sales_employee_number"
-                               id="sales-emp-no"
-                               value="{{ $salesNo }}">
-                        <input type="hidden"
-                               name="sales_employee_name"
-                               id="sales-emp-name"
-                               value="{{ $salesName }}">
+                        <input type="hidden" name="sales_employee_number" id="sales-emp-no" value="{{ $salesNo }}">
+                        <input type="hidden" name="sales_employee_name"   id="sales-emp-name" value="{{ $salesName }}">
 
                         {{-- 選択ボタン --}}
                         <button type="button"
                                 class="btn"
                                 style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
                                 onclick="openPopupA()">
-                            選択
+                            {{ __('cweb.actions.select') }}
                         </button>
                     </div>
 
@@ -808,108 +524,99 @@
                 </td>
             </tr>
 
-{{-- 2行目：情報共有者 --}}
-<tr style="{{ $rowStyle }}">
-    <td style="{{ $labelCell }}">情報共有者</td>
-    <td style="{{ $inputCell }}">
+            {{-- 2行目：情報共有者 --}}
+            <tr style="{{ $rowStyle }}">
+                <td style="{{ $labelCell }}">{{ __('cweb.form.shared_users') }}</td>
+                <td style="{{ $inputCell }}">
 
-        {{-- hidden（社員番号） --}}
-        <div id="shared-hidden-container">
-            @php
-                // old() に値があればそちら優先
-                $oldSharedNos = (array)old('shared_employee_numbers', []);
+                    {{-- hidden（社員番号） --}}
+                    <div id="shared-hidden-container">
+                        @php
+                            $oldSharedNos = (array)old('shared_employee_numbers', []);
 
-                if (!empty($oldSharedNos)) {
-                    $sharedForDisplay = \App\Models\User::whereIn('employee_number', $oldSharedNos)
-                        ->get()
-                        ->keyBy('employee_number');
-                } else {
-                    // 初回表示：案件に紐づく sharedUsers から
-                    $sharedForDisplay = $sharedUsers
-                        ->map(function($row){
-                            return $row->user;
-                        })
-                        ->filter()
-                        ->keyBy('employee_number');
-                    $oldSharedNos = $sharedForDisplay->keys()->all();
-                }
-            @endphp
+                            if (!empty($oldSharedNos)) {
+                                $sharedForDisplay = \App\Models\User::whereIn('employee_number', $oldSharedNos)
+                                    ->get()
+                                    ->keyBy('employee_number');
+                            } else {
+                                $sharedForDisplay = $sharedUsers
+                                    ->map(function($row){ return $row->user; })
+                                    ->filter()
+                                    ->keyBy('employee_number');
+                                $oldSharedNos = $sharedForDisplay->keys()->all();
+                            }
+                        @endphp
 
-            @foreach($oldSharedNos as $empNo)
-                <input type="hidden" name="shared_employee_numbers[]" value="{{ $empNo }}">
-            @endforeach
-        </div>
+                        @foreach($oldSharedNos as $empNo)
+                            <input type="hidden" name="shared_employee_numbers[]" value="{{ $empNo }}">
+                        @endforeach
+                    </div>
 
-        {{-- 表示用：社員番号 / 名前 を「、」区切り --}}
-        <div id="shared-display" style="margin-bottom:4px;color:var(--text);font-size:13px;">
-            @if(empty($oldSharedNos))
-                -
-            @else
-                @php $first = true; @endphp
-                @foreach($oldSharedNos as $empNo)
-                    @php $u = $sharedForDisplay[$empNo] ?? null; @endphp
-                    @if(!$first) 、@endif
-                    @php $first = false; @endphp
-                    @if($u)
-                        {{ $u->employee_number }} / {{ $u->name }}
-                    @else
-                        {{ $empNo }}
-                    @endif
-                @endforeach
-            @endif
-        </div>
+                    {{-- 表示用：社員番号 / 名前 を「、」区切り --}}
+                    <div id="shared-display" style="margin-bottom:4px;color:var(--text);font-size:13px;">
+                        @if(empty($oldSharedNos))
+                            -
+                        @else
+                            @php $first = true; @endphp
+                            @foreach($oldSharedNos as $empNo)
+                                @php $u = $sharedForDisplay[$empNo] ?? null; @endphp
+                                @if(!$first) 、@endif
+                                @php $first = false; @endphp
+                                @if($u)
+                                    {{ $u->employee_number }} / {{ $u->name }}
+                                @else
+                                    {{ $empNo }}
+                                @endif
+                            @endforeach
+                        @endif
+                    </div>
 
-        <button type="button"
-                class="btn"
-                style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
-                onclick="openPopupB()">
-            選択
-        </button>
+                    <button type="button"
+                            class="btn"
+                            style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
+                            onclick="openPopupB()">
+                        {{ __('cweb.actions.select') }}
+                    </button>
 
-        <div style="margin-top:4px;font-size:11px;color:var(--text);">
-            各製品の技術/製造担当は自動で情報共有されます
-        </div>
-    </td>
-</tr>
+                    <div style="margin-top:4px;font-size:11px;color:var(--text);">
+                        {{ __('cweb.form.shared_note') }}
+                    </div>
+                </td>
+            </tr>
 
             {{-- 3行目：費用負担先（必須） --}}
             <tr style="{{ $rowStyle }}">
                 <td style="{{ $labelCell }}">
-                    <span style="color:red;">＊</span>費用負担先
+                    <span style="color:red;">＊</span>{{ __('cweb.form.cost_owner') }}
                 </td>
                 <td style="{{ $inputCell }}">
 
 @php
-    // DBから来たコード・名前
     $costOwnerCode = old('cost_owner_code', $case->cost_responsible_code);
     $costOwnerName = old('cost_owner_name', $case->cost_responsible_name ?? null);
 
-    // 表示用ラベル作成
     if ($costOwnerCode && $costOwnerName) {
         $costOwnerLabel = $costOwnerCode . ' / ' . $costOwnerName;
     } else {
-        $costOwnerLabel = $costOwnerCode;   // コードのみ
+        $costOwnerLabel = $costOwnerCode;
     }
 @endphp
 
-
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
 
-<input type="hidden" name="cost_owner_code" id="cost-owner-code" value="{{ $costOwnerCode }}">
-<input type="hidden" name="cost_owner_name" id="cost-owner-name" value="{{ $costOwnerName }}">
+                        <input type="hidden" name="cost_owner_code" id="cost-owner-code" value="{{ $costOwnerCode }}">
+                        <input type="hidden" name="cost_owner_name" id="cost-owner-name" value="{{ $costOwnerName }}">
 
-
-<span id="cost-owner-display"
-      style="display:{{ $costOwnerCode ? 'inline-block' : 'none' }};font-weight:700;color:var(--text);">
-    {{ $costOwnerLabel }}
-</span>
-
+                        <span id="cost-owner-display"
+                              style="display:{{ $costOwnerCode ? 'inline-block' : 'none' }};font-weight:700;color:var(--text);">
+                            {{ $costOwnerLabel }}
+                        </span>
 
                         <button type="button"
                                 class="btn"
                                 style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
                                 onclick="openPopupC()">
-                            選択
+                            {{ __('cweb.actions.select') }}
                         </button>
                     </div>
 
@@ -922,7 +629,7 @@
             {{-- 4行目：顧客名（必須） --}}
             <tr style="{{ $rowStyle }}">
                 <td style="{{ $labelCell }}">
-                    <span style="color:red;">＊</span>顧客名
+                    <span style="color:red;">＊</span>{{ __('cweb.form.customer') }}
                 </td>
                 <td style="{{ $inputCell }}">
                     <input type="text"
@@ -938,7 +645,7 @@
             {{-- 5行目：カテゴリー（必須・複数可） --}}
             <tr style="{{ $rowStyle }}">
                 <td style="{{ $labelCell }}">
-                    <span style="color:red;">＊</span>カテゴリー
+                    <span style="color:red;">＊</span>{{ __('cweb.form.category') }}
                 </td>
                 <td style="{{ $inputCell }}">
 @php
@@ -947,17 +654,17 @@
                     <label style="color:var(--text);">
                         <input type="checkbox" name="categories[]" value="standard"
                             {{ in_array('standard', $oldCategories, true) ? 'checked' : '' }}>
-                        標準管理
+                        {{ __('cweb.categories.standard') }}
                     </label>
                     <label style="margin-left:12px;color:var(--text);">
                         <input type="checkbox" name="categories[]" value="pcn"
                             {{ in_array('pcn', $oldCategories, true) ? 'checked' : '' }}>
-                        PCN
+                        {{ __('cweb.categories.pcn') }}
                     </label>
                     <label style="margin-left:12px;color:var(--text);">
                         <input type="checkbox" name="categories[]" value="other"
                             {{ in_array('other', $oldCategories, true) ? 'checked' : '' }}>
-                        その他要求
+                        {{ __('cweb.categories.other') }}
                     </label>
 
                     @error('categories')
@@ -969,7 +676,7 @@
             {{-- 6行目：対象製品（必須・プルダウン2つ） --}}
             <tr style="{{ $rowStyle }}">
                 <td style="{{ $labelCell }}">
-                    <span style="color:red;">＊</span>対象製品
+                    <span style="color:red;">＊</span>{{ __('cweb.form.product') }}
                 </td>
                 <td style="{{ $inputCell }}">
 @php
@@ -980,7 +687,9 @@
                     <select name="product_main"
                             id="product-main"
                             style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                        <option value="" {{ $oldMain === '' ? 'selected' : '' }} style="color:#9ca3af;">選択</option>
+                        <option value="" {{ $oldMain === '' ? 'selected' : '' }} style="color:#9ca3af;">
+                            {{ __('cweb.form.choose') }}
+                        </option>
                         <option value="HogoMax-内製品"   {{ $oldMain === 'HogoMax-内製品' ? 'selected' : '' }}>HogoMax-内製品</option>
                         <option value="HogoMax-OEM品"    {{ $oldMain === 'HogoMax-OEM品' ? 'selected' : '' }}>HogoMax-OEM品</option>
                         <option value="StayClean-内製品" {{ $oldMain === 'StayClean-内製品' ? 'selected' : '' }}>StayClean-内製品</option>
@@ -992,8 +701,8 @@
                     <select name="product_sub"
                             id="product-sub"
                             style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;margin-left:8px;">
-                        <option value="" style="color:#9ca3af;">選択</option>
-                        {{-- JSで候補差し込み（create と同じ） --}}
+                        <option value="" style="color:#9ca3af;">{{ __('cweb.form.choose') }}</option>
+                        {{-- JSで候補差し込み --}}
                     </select>
 
                     @error('product_main')
@@ -1007,7 +716,7 @@
 
             {{-- 7行目：PCN管理項目 --}}
             <tr style="{{ $rowStyle }}">
-                <td style="{{ $labelCell }}">PCN管理項目</td>
+                <td style="{{ $labelCell }}">{{ __('cweb.show.pcn_items') }}</td>
                 <td style="{{ $inputCell }}">
                     <div id="pcn-rows">
 @php
@@ -1034,21 +743,21 @@
                             <div class="pcn-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                                 <select name="pcn_items[{{ $i }}][category]"
                                         style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                                    <option value="">選択</option>
-                                    <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>仕様書内容</option>
-                                    <option value="man"         {{ ($item['category'] ?? '') === 'man' ? 'selected' : '' }}>人（Man）</option>
-                                    <option value="machine"     {{ ($item['category'] ?? '') === 'machine' ? 'selected' : '' }}>機械（Machine）</option>
-                                    <option value="material"    {{ ($item['category'] ?? '') === 'material' ? 'selected' : '' }}>材料（Material）</option>
-                                    <option value="method"      {{ ($item['category'] ?? '') === 'method' ? 'selected' : '' }}>方法（Method）</option>
-                                    <option value="measurement" {{ ($item['category'] ?? '') === 'measurement' ? 'selected' : '' }}>測定（Measurement）</option>
-                                    <option value="environment" {{ ($item['category'] ?? '') === 'environment' ? 'selected' : '' }}>環境（Environment）</option>
-                                    <option value="other"       {{ ($item['category'] ?? '') === 'other' ? 'selected' : '' }}>その他</option>
+                                    <option value="">{{ __('cweb.form.choose') }}</option>
+                                    <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.spec') }}</option>
+                                    <option value="man"         {{ ($item['category'] ?? '') === 'man' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.man') }}</option>
+                                    <option value="machine"     {{ ($item['category'] ?? '') === 'machine' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.machine') }}</option>
+                                    <option value="material"    {{ ($item['category'] ?? '') === 'material' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.material') }}</option>
+                                    <option value="method"      {{ ($item['category'] ?? '') === 'method' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.method') }}</option>
+                                    <option value="measurement" {{ ($item['category'] ?? '') === 'measurement' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.measurement') }}</option>
+                                    <option value="environment" {{ ($item['category'] ?? '') === 'environment' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.environment') }}</option>
+                                    <option value="other"       {{ ($item['category'] ?? '') === 'other' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.other') }}</option>
                                 </select>
 
                                 <input type="text"
                                        name="pcn_items[{{ $i }}][title]"
                                        value="{{ $item['title'] ?? '' }}"
-                                       placeholder="ラベル変更など"
+                                       placeholder="{{ __('cweb.form.pcn_title_placeholder') }}"
                                        style="width:200px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
 
                                 <input type="number"
@@ -1056,12 +765,12 @@
                                        value="{{ $item['months_before'] ?? '' }}"
                                        min="0"
                                        style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                                <span style="color:var(--text);">ヵ月前連絡</span>
+                                <span style="color:var(--text);">{{ __('cweb.pcn.months_before_suffix') }}</span>
 
                                 <button type="button"
                                         onclick="removePcnRow(this)"
                                         style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                                    削除
+                                    {{ __('cweb.actions.remove') }}
                                 </button>
                             </div>
                         @endforeach
@@ -1070,14 +779,14 @@
                     <button type="button"
                             onclick="addPcnRow()"
                             style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
-                        ＋ 行追加
+                        {{ __('cweb.actions.add_row') }}
                     </button>
                 </td>
             </tr>
 
             {{-- 8行目：その他要求 --}}
             <tr style="{{ $rowStyle }}">
-                <td style="{{ $labelCell }}">その他要求</td>
+                <td style="{{ $labelCell }}">{{ __('cweb.show.other_requests') }}</td>
                 <td style="{{ $inputCell }}">
                     <div id="other-rows">
 @php
@@ -1105,18 +814,15 @@
 @endphp
 
                         @foreach($otherOld as $i => $row)
-                            @php
-                                $respLabel = $row['responsible_label'] ?? '';
-                            @endphp
+                            @php $respLabel = $row['responsible_label'] ?? ''; @endphp
 
                             <div class="other-row" style="margin-bottom:8px;">
                                 <textarea name="other_requirements[{{ $i }}][content]"
-                                          placeholder="要求内容"
+                                          placeholder="{{ __('cweb.form.other_content_placeholder') }}"
                                           style="width:30%;height:40px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;resize:none;">{{ $row['content'] ?? '' }}</textarea>
 
                                 <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-
-                                    <span style="font-weight:700;color:var(--text);">対応者：</span>
+                                    <span style="font-weight:700;color:var(--text);">{{ __('cweb.show.responsible') }}：</span>
 
                                     <input type="hidden"
                                            name="other_requirements[{{ $i }}][responsible_employee_number]"
@@ -1137,13 +843,13 @@
                                             class="btn"
                                             style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
                                             onclick="openPopupAForOther({{ $i }})">
-                                        選択
+                                        {{ __('cweb.actions.select') }}
                                     </button>
 
                                     <button type="button"
                                             onclick="removeOtherRow(this)"
                                             style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                                        削除
+                                        {{ __('cweb.actions.remove') }}
                                     </button>
                                 </div>
                             </div>
@@ -1153,16 +859,16 @@
                     <button type="button"
                             onclick="addOtherRow()"
                             style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
-                        ＋ 行追加
+                        {{ __('cweb.actions.add_row') }}
                     </button>
                 </td>
             </tr>
 
             {{-- 9行目：Will --}}
             <tr style="{{ $rowStyle }}">
-                <td style="{{ $labelCell }}">Will</td>
+                <td style="{{ $labelCell }}">{{ __('cweb.show.will') }}</td>
                 <td style="{{ $inputCell }}">
-                    <span style="color:var(--text);font-weight:700;">登録費：</span>
+                    <span style="color:var(--text);font-weight:700;">{{ __('cweb.show.will_initial') }}：</span>
                     <input type="number"
                            name="will_initial"
                            value="{{ old('will_initial', $case->will_registration_cost) }}"
@@ -1171,7 +877,7 @@
                     <span style="color:var(--text);font-weight:700;">will</span>
 
                     &nbsp;&nbsp;
-                    <span style="color:var(--text);font-weight:700;">月額：</span>
+                    <span style="color:var(--text);font-weight:700;">{{ __('cweb.show.will_monthly') }}：</span>
                     <input type="number"
                            name="will_monthly"
                            value="{{ old('will_monthly', $case->will_monthly_cost) }}"
@@ -1183,7 +889,7 @@
 
             {{-- 10行目：月額管理費の分配 --}}
             <tr style="{{ $rowStyle }}">
-                <td style="{{ $labelCell }}">月額管理費の分配</td>
+                <td style="{{ $labelCell }}">{{ __('cweb.show.will_allocations') }}</td>
                 <td style="{{ $inputCell }}">
                     @if($errors->has('will_allocations'))
                         <div style="color:#dc2626; font-size:14px; margin:0 0 4px;">
@@ -1229,7 +935,7 @@
                                         class="btn"
                                         style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
                                         onclick="openPopupAForWill({{ $i }})">
-                                    選択
+                                    {{ __('cweb.actions.select') }}
                                 </button>
 
                                 <span id="will-emp-display-{{ $i }}"
@@ -1249,7 +955,7 @@
                                 <button type="button"
                                         onclick="removeWillRow(this)"
                                         style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                                    削除
+                                    {{ __('cweb.actions.remove') }}
                                 </button>
                             </div>
                         @endforeach
@@ -1258,14 +964,14 @@
                     <button type="button"
                             onclick="addWillRow()"
                             style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
-                        ＋ 行追加
+                        {{ __('cweb.actions.add_row') }}
                     </button>
                 </td>
             </tr>
 
             {{-- 11行目：関連Q-WEB --}}
             <tr style="{{ $rowStyle }}">
-                <td style="{{ $labelCell }}">関連Q-WEB</td>
+                <td style="{{ $labelCell }}">{{ __('cweb.show.related_qweb') }}</td>
                 <td style="{{ $inputCell }}">
                     <textarea name="related_qweb"
                               rows="2"
@@ -1283,32 +989,36 @@
 
 {{-- ▼ 社員検索モーダル本体 --}}
 <div class="ui large modal transition front" id="empsearch">
-    <div class="header title_boader" id="emplbltype1">依頼者を選択（ダブルクリックで追加/削除）</div>
-    <div class="header title_boader" id="emplbltype2" style="display: none;">共有したい人を選択（ダブルクリックで追加/削除）</div>
-    <div class="header title_boader" id="emplbltype3" style="display: none;">費用負担先を選択（ダブルクリックで追加/削除）</div>
-    <div class="header title_boader" id="emplbltype4" style="display: none;">担当技術者を選択（ダブルクリックで追加/削除）</div>
+    <div class="header title_boader" id="emplbltype1">{{ __('cweb.emp_modal.title_sales') }}</div>
+    <div class="header title_boader" id="emplbltype2" style="display: none;">{{ __('cweb.emp_modal.title_shared') }}</div>
+    <div class="header title_boader" id="emplbltype3" style="display: none;">{{ __('cweb.emp_modal.title_cost') }}</div>
+    <div class="header title_boader" id="emplbltype4" style="display: none;">{{ __('cweb.emp_modal.title_other') }}</div>
 
     <input type="hidden" id="empworkmode" value="0">
 
     <div class="scrolling content" style="min-height: 300px">
         <div class="cweb-search-group">
-            <input type="text" placeholder="keyword..." data-content="メンバーを検索" id="empkeyword" autocomplete="off">
+            <input type="text"
+                   placeholder="{{ __('cweb.search.keyword_placeholder') }}"
+                   data-content="{{ __('cweb.search.placeholder') }}"
+                   id="empkeyword"
+                   autocomplete="off">
 
-            <button class="cweb-search-btn" id="empicon">
+            <button class="cweb-search-btn" id="empicon" type="button">
                 <i class="search icon"></i>
-                検索
+                {{ __('cweb.actions.search') }}
             </button>
         </div>
 
         <div class="ui two column grid emplist">
             <div class="row" style="margin-top: 1rem">
                 <div class="column">
-                    <label class="emp_f_s">SearchResult</label>
+                    <label class="emp_f_s">{{ __('cweb.emp_modal.search_result') }}</label>
                     <div class="emp_l_s"></div>
                     <div class="ui middle divided selection list" id="EmpSearchResult"></div>
                 </div>
                 <div class="column">
-                    <label class="emp_f_s">Selected</label>
+                    <label class="emp_f_s">{{ __('cweb.emp_modal.selected') }}</label>
                     <div class="emp_l_s"></div>
                     <div class="ui middle divided selection list" id="empselectedlist"></div>
                 </div>
@@ -1317,33 +1027,71 @@
     </div>
 
     <div class="actions">
-        <div class="ui button positive ok" id="emp-ok-btn">OK</div>
-        <div class="ui button cancel" id="emp-cancel-btn">Cancel</div>
+        <div class="ui button positive ok" id="emp-ok-btn">{{ __('cweb.common.ok') }}</div>
+        <div class="ui button cancel" id="emp-cancel-btn">{{ __('cweb.common.cancel') }}</div>
     </div>
 </div>
 
 
-{{-- 更新完了モーダル（メッセージだけ変更） --}}
+{{-- 更新完了モーダル --}}
 <div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
 
 <div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
-    <div class="header">完了</div>
+    <div class="header">{{ __('cweb.modal.done_title') }}</div>
     <div class="content" style="text-align:center; font-size:16px; padding:20px;">
-        更新しました
+        {{ __('cweb.modal.updated') }}
     </div>
     <div class="actions" style="text-align:center;">
-        <button type="button" class="ui blue button" onclick="closeSuccessModal()">OK</button>
+        <button type="button" class="ui blue button" onclick="closeSuccessModal()">{{ __('cweb.common.ok') }}</button>
     </div>
 </div>
 
-
-
-{{-- 社員検索モーダル（HTML部分も create と同じでOK。ここでは省略してもよい） --}}
-{{-- ★create.blade.php の emp-modal, empsearch 等の HTML・script をこの下にそのままコピペしてください --}}
-
 <script>
+/**
+ * Blade内の JS で使う翻訳（行追加した瞬間に日本語直書きが混ざるのを防ぐ）
+ */
+const I18N = {
+  actions: {
+    select: @json(__('cweb.actions.select')),
+    remove: @json(__('cweb.actions.remove')),
+    addRow:  @json(__('cweb.actions.add_row')),
+    search:  @json(__('cweb.actions.search')),
+  },
+  common: {
+    ok: @json(__('cweb.common.ok')),
+    cancel: @json(__('cweb.common.cancel')),
+  },
+  form: {
+    choose: @json(__('cweb.form.choose')),
+    pcnTitlePh: @json(__('cweb.form.pcn_title_placeholder')),
+    otherContentPh: @json(__('cweb.form.other_content_placeholder')),
+  },
+  pcn: {
+    monthsBeforeSuffix: @json(__('cweb.pcn.months_before_suffix')),
+    categories: {
+      spec: @json(__('cweb.pcn.categories.spec')),
+      man: @json(__('cweb.pcn.categories.man')),
+      machine: @json(__('cweb.pcn.categories.machine')),
+      material: @json(__('cweb.pcn.categories.material')),
+      method: @json(__('cweb.pcn.categories.method')),
+      measurement: @json(__('cweb.pcn.categories.measurement')),
+      environment: @json(__('cweb.pcn.categories.environment')),
+      other: @json(__('cweb.pcn.categories.other')),
+    }
+  },
+  empModal: {
+    search_result: @json(__('cweb.emp_modal.search_result')),
+    selected: @json(__('cweb.emp_modal.selected')),
+    title_sales: @json(__('cweb.emp_modal.title_sales')),
+    title_shared:@json(__('cweb.emp_modal.title_shared')),
+    title_cost:  @json(__('cweb.emp_modal.title_cost')),
+    title_other: @json(__('cweb.emp_modal.title_other')),
+    title_will:  @json(__('cweb.emp_modal.title_will')),
+  }
+};
+
 let empContext = null;
-    // mode: 'A' = 営業窓口, 'B' = 情報共有者, 'C' = 費用負担先
+// mode: 'A' = 営業窓口, 'B' = 情報共有者, 'C' = 費用負担先
 let tempSelectedEmps = [];    // A/B/その他要求/Will用
 let tempSelectedCost = null;  // C 用
 
@@ -1351,255 +1099,230 @@ let tempSelectedCost = null;  // C 用
 let currentOtherIndex = null;
 let currentWillIndex  = null;
 
-    // ▼ PCN行追加・削除
-    function addPcnRow() {
-        const container = document.getElementById('pcn-rows');
-        const index = container.querySelectorAll('.pcn-row').length;
-        const div = document.createElement('div');
-        div.className = 'pcn-row';
-        div.style = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;';
+// ▼ PCN行追加・削除
+function addPcnRow() {
+    const container = document.getElementById('pcn-rows');
+    const index = container.querySelectorAll('.pcn-row').length;
+    const div = document.createElement('div');
+    div.className = 'pcn-row';
+    div.style = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;';
 
-        div.innerHTML = `
-            <select name="pcn_items[${index}][category]"
-                    style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                <option value="">選択</option>
-                <option value="spec">仕様書内容</option>
-                <option value="man">人（Man）</option>
-                <option value="machine">機械（Machine）</option>
-                <option value="material">材料（Material）</option>
-                <option value="method">方法（Method）</option>
-                <option value="measurement">測定（Measurement）</option>
-                <option value="environment">環境（Environment）</option>
-                <option value="other">その他</option>
-            </select>
-            <input type="text" name="pcn_items[${index}][title]"
-                   placeholder="ラベル変更など"
-                   style="width:200px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-            <input type="number" name="pcn_items[${index}][months_before]"
-                   min="0"
-                   style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-            <span style="color:var(--text);">ヵ月前連絡</span>
-            <button type="button"
-                    onclick="removePcnRow(this)"
-                    style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                削除
-            </button>
-        `;
-        container.appendChild(div);
-    }
-    function removePcnRow(btn) {
-        const row = btn.closest('.pcn-row');
-        if (row) row.remove();
-    }
+    div.innerHTML = `
+        <select name="pcn_items[${index}][category]"
+                style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+            <option value="">${I18N.form.choose}</option>
+            <option value="spec">${I18N.pcn.categories.spec}</option>
+            <option value="man">${I18N.pcn.categories.man}</option>
+            <option value="machine">${I18N.pcn.categories.machine}</option>
+            <option value="material">${I18N.pcn.categories.material}</option>
+            <option value="method">${I18N.pcn.categories.method}</option>
+            <option value="measurement">${I18N.pcn.categories.measurement}</option>
+            <option value="environment">${I18N.pcn.categories.environment}</option>
+            <option value="other">${I18N.pcn.categories.other}</option>
+        </select>
+        <input type="text" name="pcn_items[${index}][title]"
+               placeholder="${I18N.form.pcnTitlePh}"
+               style="width:200px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+        <input type="number" name="pcn_items[${index}][months_before]"
+               min="0"
+               style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+        <span style="color:var(--text);">${I18N.pcn.monthsBeforeSuffix}</span>
+        <button type="button"
+                onclick="removePcnRow(this)"
+                style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
+            ${I18N.actions.remove}
+        </button>
+    `;
+    container.appendChild(div);
+}
+function removePcnRow(btn) {
+    const row = btn.closest('.pcn-row');
+    if (row) row.remove();
+}
 
-    // ▼ その他要求行追加・削除
-    function addOtherRow() {
-        const container = document.getElementById('other-rows');
-        const index = container.querySelectorAll('.other-row').length;
-        const div = document.createElement('div');
-        div.className = 'other-row';
-        div.style = 'margin-bottom:8px;';
+// ▼ その他要求行追加・削除
+function addOtherRow() {
+    const container = document.getElementById('other-rows');
+    const index = container.querySelectorAll('.other-row').length;
+    const div = document.createElement('div');
+    div.className = 'other-row';
+    div.style = 'margin-bottom:8px;';
 
-        div.innerHTML = `
-            <textarea name="other_requirements[${index}][content]"
-                      placeholder="要求内容"
-                      style="width:30%;height:40px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;resize:none;"></textarea>
+    div.innerHTML = `
+        <textarea name="other_requirements[${index}][content]"
+                  placeholder="${I18N.form.otherContentPh}"
+                  style="width:30%;height:40px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;resize:none;"></textarea>
 
-            <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-weight:700;color:var(--text);">{{ __('cweb.show.responsible') }}：</span>
 
-                <span style="font-weight:700;color:var(--text);">対応者：</span>
-
-                <input type="hidden"
-                       name="other_requirements[${index}][responsible_employee_number]"
-                       id="other-resp-no-${index}">
-
-                <input type="hidden"
-                       name="other_requirements[${index}][responsible_label]"
-                       id="other-resp-label-${index}">
-
-                <span id="other-resp-display-${index}"
-                      style="display:none;color:var(--text);font-weight:700;"></span>
-
-                <button type="button"
-                        class="btn"
-                        style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
-                        onclick="openPopupAForOther(${index})">
-                    選択
-                </button>
-
-                <button type="button"
-                        onclick="removeOtherRow(this)"
-                        style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                    削除
-                </button>
-            </div>
-        `;
-        container.appendChild(div);
-    }
-
-    function removeOtherRow(btn) {
-        const row = btn.closest('.other-row');
-        if (row) row.remove();
-    }
-
-    // ▼ Will分配行追加・削除
-    function addWillRow() {
-        const container = document.getElementById('will-rows');
-        const index = container.querySelectorAll('.will-row').length;
-        const div = document.createElement('div');
-        div.className = 'will-row';
-        div.style = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;';
-
-        div.innerHTML = `
             <input type="hidden"
-                   name="will_allocations[${index}][employee_number]"
-                   id="will-emp-no-${index}">
+                   name="other_requirements[${index}][responsible_employee_number]"
+                   id="other-resp-no-${index}">
+
             <input type="hidden"
-                   name="will_allocations[${index}][employee_name]"
-                   id="will-emp-name-${index}">
+                   name="other_requirements[${index}][responsible_label]"
+                   id="other-resp-label-${index}">
+
+            <span id="other-resp-display-${index}"
+                  style="display:none;color:var(--text);font-weight:700;"></span>
+
             <button type="button"
                     class="btn"
                     style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
-                    onclick="openPopupAForWill(${index})">
-                選択
+                    onclick="openPopupAForOther(${index})">
+                ${I18N.actions.select}
             </button>
-            <span id="will-emp-display-${index}"
-                style="min-width:220px;display:inline-block;color:var(--text);font-weight:700;">
-            </span>
 
-            <input type="number"
-                   name="will_allocations[${index}][percentage]"
-                   min="0" max="100"
-                   style="width:80px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-            <span style="color:var(--text);">%</span>
             <button type="button"
-                    onclick="removeWillRow(this)"
+                    onclick="removeOtherRow(this)"
                     style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                削除
+                ${I18N.actions.remove}
             </button>
-        `;
-        container.appendChild(div);
+        </div>
+    `;
+    container.appendChild(div);
+}
+function removeOtherRow(btn) {
+    const row = btn.closest('.other-row');
+    if (row) row.remove();
+}
+
+// ▼ Will分配行追加・削除
+function addWillRow() {
+    const container = document.getElementById('will-rows');
+    const index = container.querySelectorAll('.will-row').length;
+    const div = document.createElement('div');
+    div.className = 'will-row';
+    div.style = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;';
+
+    div.innerHTML = `
+        <input type="hidden"
+               name="will_allocations[${index}][employee_number]"
+               id="will-emp-no-${index}">
+        <input type="hidden"
+               name="will_allocations[${index}][employee_name]"
+               id="will-emp-name-${index}">
+        <button type="button"
+                class="btn"
+                style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
+                onclick="openPopupAForWill(${index})">
+            ${I18N.actions.select}
+        </button>
+        <span id="will-emp-display-${index}"
+              style="min-width:220px;display:inline-block;color:var(--text);font-weight:700;">
+        </span>
+
+        <input type="number"
+               name="will_allocations[${index}][percentage]"
+               min="0" max="100"
+               style="width:80px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+        <span style="color:var(--text);">%</span>
+        <button type="button"
+                onclick="removeWillRow(this)"
+                style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
+            ${I18N.actions.remove}
+        </button>
+    `;
+    container.appendChild(div);
+}
+function removeWillRow(btn) {
+    const row = btn.closest('.will-row');
+    if (row) row.remove();
+}
+
+// ▼ 対象製品プルダウン連動
+const productOptions = {
+    'HogoMax-内製品':   ['102','103','104','105','106','107','108','152','153','201','202','203','204'],
+    'HogoMax-OEM品':    ['002','003'],
+    'StayClean-内製品': ['201','301','401'],
+    'StayClean-OEM品':  ['-A','-F','-R'],
+    'ResiFlat-内製品':   ['103'],
+    'その他':           []
+};
+
+function refreshProductSubOptions(selectedMain, selectedSub) {
+    const subSelect = document.getElementById('product-sub');
+    if (!subSelect) return;
+
+    while (subSelect.firstChild) subSelect.removeChild(subSelect.firstChild);
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = I18N.form.choose;
+    placeholder.style.color = '#9ca3af';
+    subSelect.appendChild(placeholder);
+
+    const codes = productOptions[selectedMain] || [];
+    if (codes.length === 0) {
+        subSelect.disabled = true;
+        subSelect.value = '';
+        return;
     }
-    function removeWillRow(btn) {
-        const row = btn.closest('.will-row');
-        if (row) row.remove();
-    }
+    subSelect.disabled = false;
 
-    // ▼ 対象製品プルダウン連動
-    const productOptions = {
-        'HogoMax-内製品':   ['102','103','104','105','106','107','108','152','153','201','202','203','204'],
-        'HogoMax-OEM品':    ['002','003'],
-        'StayClean-内製品': ['201','301','401'],
-        'StayClean-OEM品':  ['-A','-F','-R'],
-        'ResiFlat-内製品':   ['103'],
-        'その他':           []
-    };
-
-    function refreshProductSubOptions(selectedMain, selectedSub) {
-        const subSelect = document.getElementById('product-sub');
-        if (!subSelect) return;
-
-        while (subSelect.firstChild) {
-            subSelect.removeChild(subSelect.firstChild);
-        }
-
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = '選択';
-        placeholder.style.color = '#9ca3af';
-        subSelect.appendChild(placeholder);
-
-        const codes = productOptions[selectedMain] || [];
-        if (codes.length === 0) {
-            subSelect.disabled = true;
-            subSelect.value = '';
-            return;
-        }
-
-        subSelect.disabled = false;
-
-        codes.forEach(code => {
-            const opt = document.createElement('option');
-            opt.value = code;
-            opt.textContent = code;
-            subSelect.appendChild(opt);
-        });
-
-        if (selectedSub && codes.includes(selectedSub)) {
-            subSelect.value = selectedSub;
-        } else {
-            subSelect.value = '';
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        const mainSelect = document.getElementById('product-main');
-        const subSelect  = document.getElementById('product-sub');
-        if (!mainSelect || !subSelect) return;
-
-        const initialMain = mainSelect.value;
-        const initialSub  = "{{ old('product_sub', '') }}";
-
-        refreshProductSubOptions(initialMain, initialSub);
-
-        mainSelect.addEventListener('change', function () {
-            refreshProductSubOptions(this.value, '');
-        });
+    codes.forEach(code => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = code;
+        subSelect.appendChild(opt);
     });
 
-    // =========================
-    // ここから ポップアップA〜C 用
-    // =========================
+    if (selectedSub && codes.includes(selectedSub)) subSelect.value = selectedSub;
+    else subSelect.value = '';
+}
 
-    // ▼ ダミーマスタ（★実際は社内システムから取得に差し替え想定）
-    const EMP_MASTER = [
-        { no: '15329', name: '藤崎 隼也', dept: 'アプリ大学', en: 'Shyunya Fujisaki' },
-        { no: '10001', name: '山田 太郎', dept: '営業一課',   en: 'Taro Yamada' },
-        { no: '10002', name: '佐藤 花子', dept: '営業二課',   en: 'Hanako Sato' },
-    ];
+document.addEventListener('DOMContentLoaded', function () {
+    const mainSelect = document.getElementById('product-main');
+    const subSelect  = document.getElementById('product-sub');
+    if (!mainSelect || !subSelect) return;
 
-    const COST_OWNERS = [
-        { code: 'C001', name: '営業本部' },
-        { code: 'C002', name: 'デバイス事業部' },
-        { code: 'C003', name: '管理部門' },
-    ];
+    const initialMain = mainSelect.value;
+    const initialSub  = @json(old('product_sub', $oldSub ?? ''));
 
-    // mode: 'A' = 営業窓口, 'B' = 情報共有者, 'C' = 費用負担先
-    // let empMode = null;
-    // let tempSelectedEmps = [];    // A/B 用
-    // let tempSelectedCost = null;  // C 用
+    refreshProductSubOptions(initialMain, initialSub);
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const keywordInput = document.getElementById('empkeyword');
-        const searchIcon   = document.getElementById('empicon');
-        const okBtn        = document.getElementById('emp-ok-btn');
-        const cancelBtn    = document.getElementById('emp-cancel-btn');
-
-        if (keywordInput) {
-            keywordInput.addEventListener('keydown', e => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    rebuildEmpLists();
-                }
-            });
-        }
-        if (searchIcon) {
-            searchIcon.addEventListener('click', rebuildEmpLists);
-        }
-        if (okBtn) {
-            okBtn.addEventListener('click', applyEmpSelection);
-        }
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', closeEmpModal);
-        }
+    mainSelect.addEventListener('change', function () {
+        refreshProductSubOptions(this.value, '');
     });
+});
 
-    // ========== モーダル開閉 ==========
+// =========================
+// ここから ポップアップA〜C 用
+// =========================
 
-// ========== モーダル開閉 ==========
+// ▼ ダミーマスタ（★実際は社内システムから取得に差し替え想定）
+const EMP_MASTER = [
+    { no: '15329', name: '藤崎 隼也', dept: 'アプリ大学', en: 'Shyunya Fujisaki' },
+    { no: '10001', name: '山田 太郎', dept: '営業一課',   en: 'Taro Yamada' },
+    { no: '10002', name: '佐藤 花子', dept: '営業二課',   en: 'Hanako Sato' },
+];
 
-// ▼ 共通の社員/費用負担先ポップアップを開く
-//   context: 'sales' | 'shared' | 'cost' | 'other' | 'will'
+const COST_OWNERS = [
+    { code: 'C001', name: '営業本部' },
+    { code: 'C002', name: 'デバイス事業部' },
+    { code: 'C003', name: '管理部門' },
+];
+
+document.addEventListener('DOMContentLoaded', () => {
+    const keywordInput = document.getElementById('empkeyword');
+    const searchIcon   = document.getElementById('empicon');
+    const okBtn        = document.getElementById('emp-ok-btn');
+    const cancelBtn    = document.getElementById('emp-cancel-btn');
+
+    if (keywordInput) {
+        keywordInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                rebuildEmpLists();
+            }
+        });
+    }
+    if (searchIcon) searchIcon.addEventListener('click', rebuildEmpLists);
+    if (okBtn) okBtn.addEventListener('click', applyEmpSelection);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeEmpModal);
+});
+
 // ▼ 共通の社員/費用負担先ポップアップを開く
 //   context: 'sales' | 'shared' | 'cost' | 'other' | 'will'
 function openEmpModal(context) {
@@ -1612,37 +1335,22 @@ function openEmpModal(context) {
         if (el) el.style.display = 'none';
     });
 
-    // 見出し切り替え（ここは元のままでOK）
+    // 見出し切り替え（翻訳）
     if (context === 'sales') {
         const h = document.getElementById('emplbltype1');
-        if (h) {
-            h.style.display = 'block';
-            h.textContent = '営業窓口としたい人を選択（ダブルクリックで追加/削除）';
-        }
+        if (h) { h.style.display = 'block'; h.textContent = I18N.empModal.title_sales; }
     } else if (context === 'shared') {
         const h = document.getElementById('emplbltype2');
-        if (h) {
-            h.style.display = 'block';
-            h.textContent = '共有したい人を選択（ダブルクリックで追加/削除）';
-        }
+        if (h) { h.style.display = 'block'; h.textContent = I18N.empModal.title_shared; }
     } else if (context === 'cost') {
         const h = document.getElementById('emplbltype3');
-        if (h) {
-            h.style.display = 'block';
-            h.textContent = '費用負担先を選択（ダブルクリックで追加/削除）';
-        }
+        if (h) { h.style.display = 'block'; h.textContent = I18N.empModal.title_cost; }
     } else if (context === 'other') {
         const h = document.getElementById('emplbltype1');
-        if (h) {
-            h.style.display = 'block';
-            h.textContent = 'その他要求の対応者を選択（ダブルクリックで追加/削除）';
-        }
+        if (h) { h.style.display = 'block'; h.textContent = I18N.empModal.title_other; }
     } else if (context === 'will') {
         const h = document.getElementById('emplbltype1');
-        if (h) {
-            h.style.display = 'block';
-            h.textContent = '月額管理費の分配担当者を選択（ダブルクリックで追加/削除）';
-        }
+        if (h) { h.style.display = 'block'; h.textContent = I18N.empModal.title_will; }
     }
 
     // キーワード初期化
@@ -1655,9 +1363,9 @@ function openEmpModal(context) {
     // リスト再描画
     rebuildEmpLists();
 
-    // オーバーレイ＆モーダル表示（★ここを強制表示に）
-    const overlay = document.getElementById('emp-modal-overlay'); // .ui.dimmer
-    const modal   = document.getElementById('empsearch');         // .ui.modal
+    // オーバーレイ＆モーダル表示
+    const overlay = document.getElementById('emp-modal-overlay');
+    const modal   = document.getElementById('empsearch');
 
     if (overlay) {
         overlay.classList.add('visible', 'active');
@@ -1685,8 +1393,6 @@ function closeEmpModal() {
         modal.classList.remove('visible', 'active');
         modal.style.opacity = '0';
         modal.style.pointerEvents = 'none';
-        // display:block のままでもいいけど、気持ち悪ければ none にしてOK
-        // modal.style.display = 'none';
     }
 
     tempSelectedEmps = [];
@@ -1695,10 +1401,6 @@ function closeEmpModal() {
     currentWillIndex  = null;
 }
 
-
-
-
-    // A: 営業窓口
 // A: 営業窓口
 function openPopupA() {
     currentOtherIndex = null;
@@ -1718,9 +1420,7 @@ function openPopupC() {
     openEmpModal('cost');
 }
 
-
-    // ========== hidden から初期選択読み込み ==========
-
+// ========== hidden から初期選択読み込み ==========
 function initTempSelectionFromHidden() {
     tempSelectedEmps = [];
     tempSelectedCost = null;
@@ -1743,9 +1443,7 @@ function initTempSelectionFromHidden() {
             inputs.forEach(input => {
                 const no = input.value;
                 const emp = EMP_MASTER.find(e => e.no === no);
-                if (emp) {
-                    tempSelectedEmps.push({ ...emp });
-                }
+                if (emp) tempSelectedEmps.push({ ...emp });
             });
         }
 
@@ -1755,9 +1453,7 @@ function initTempSelectionFromHidden() {
         const code   = codeEl?.value || '';
         const name   = nameEl?.value || '';
 
-        if (code && name) {
-            tempSelectedCost = { code, name };
-        }
+        if (code && name) tempSelectedCost = { code, name };
 
     } else if (empContext === 'other') {
         if (currentOtherIndex !== null) {
@@ -1787,8 +1483,7 @@ function initTempSelectionFromHidden() {
     }
 }
 
-    // ========== リスト描画 ==========
-
+// ========== リスト描画 ==========
 function rebuildEmpLists() {
     const kwInput = document.getElementById('empkeyword');
     const keyword = (kwInput?.value || '').trim().toLowerCase();
@@ -1799,7 +1494,7 @@ function rebuildEmpLists() {
     resultList.innerHTML   = '';
     selectedList.innerHTML = '';
 
-    // ▼ 社員を使うケース（A系）
+    // ▼ 社員を使うケース
     if (empContext === 'sales' || empContext === 'shared' || empContext === 'other' || empContext === 'will') {
 
         EMP_MASTER
@@ -1824,7 +1519,7 @@ function rebuildEmpLists() {
             selectedList.appendChild(item);
         });
 
-    // ▼ 費用負担先（C系）
+    // ▼ 費用負担先
     } else if (empContext === 'cost') {
 
         COST_OWNERS
@@ -1849,34 +1544,33 @@ function rebuildEmpLists() {
     }
 }
 
-    function createEmpItem(emp) {
-        const div = document.createElement('div');
-        div.className = 'item';
-        const content = document.createElement('div');
-        content.className = 'content';
-        const header = document.createElement('div');
-        header.className = 'header';
-        header.innerHTML = `<i class="user circle outline icon"></i>${emp.no} / ${emp.name} / ${emp.dept} / ${emp.en || ''}`;
-        content.appendChild(header);
-        div.appendChild(content);
-        return div;
-    }
+function createEmpItem(emp) {
+    const div = document.createElement('div');
+    div.className = 'item';
+    const content = document.createElement('div');
+    content.className = 'content';
+    const header = document.createElement('div');
+    header.className = 'header';
+    header.innerHTML = `<i class="user circle outline icon"></i>${emp.no} / ${emp.name} / ${emp.dept} / ${emp.en || ''}`;
+    content.appendChild(header);
+    div.appendChild(content);
+    return div;
+}
 
-    function createCostItem(co) {
-        const div = document.createElement('div');
-        div.className = 'item';
-        const content = document.createElement('div');
-        content.className = 'content';
-        const header = document.createElement('div');
-        header.className = 'header';
-        header.textContent = `${co.code} / ${co.name}`;
-        content.appendChild(header);
-        div.appendChild(content);
-        return div;
-    }
+function createCostItem(co) {
+    const div = document.createElement('div');
+    div.className = 'item';
+    const content = document.createElement('div');
+    content.className = 'content';
+    const header = document.createElement('div');
+    header.className = 'header';
+    header.textContent = `${co.code} / ${co.name}`;
+    content.appendChild(header);
+    div.appendChild(content);
+    return div;
+}
 
-    // ========== ダブルクリックで追加/削除 ==========
-
+// ========== ダブルクリックで追加/削除 ==========
 function toggleEmpSelect(no) {
     // sales / other / will は 1件だけ選択
     if (empContext === 'sales' || empContext === 'other' || empContext === 'will') {
@@ -1891,28 +1585,25 @@ function toggleEmpSelect(no) {
     // shared は複数選択
     } else if (empContext === 'shared') {
         const idx = tempSelectedEmps.findIndex(e => e.no === no);
-        if (idx >= 0) {
-            tempSelectedEmps.splice(idx, 1);
-        } else {
+        if (idx >= 0) tempSelectedEmps.splice(idx, 1);
+        else {
             const emp = EMP_MASTER.find(e => e.no === no);
             if (emp) tempSelectedEmps.push({ ...emp });
         }
     }
-
     rebuildEmpLists();
 }
-    function toggleCostSelect(code) {
-        if (tempSelectedCost && tempSelectedCost.code === code) {
-            tempSelectedCost = null; // もう一度 → 削除
-        } else {
-            const co = COST_OWNERS.find(c => c.code === code);
-            if (co) tempSelectedCost = { ...co };
-        }
-        rebuildEmpLists();
+function toggleCostSelect(code) {
+    if (tempSelectedCost && tempSelectedCost.code === code) {
+        tempSelectedCost = null;
+    } else {
+        const co = COST_OWNERS.find(c => c.code === code);
+        if (co) tempSelectedCost = { ...co };
     }
+    rebuildEmpLists();
+}
 
-    // ========== OK で反映・Cancel で破棄 ==========
-
+// ========== OK で反映 ==========
 function applyEmpSelection() {
     if (empContext === 'sales') {
         const hiddenNo   = document.getElementById('sales-emp-no');
@@ -1923,8 +1614,6 @@ function applyEmpSelection() {
             const emp = tempSelectedEmps[0];
             hiddenNo.value   = emp.no;
             hiddenName.value = emp.name;
-
-            // 表示は「社員番号 / 名前」
             display.textContent = emp.no + ' / ' + emp.name;
             display.style.display = 'inline-block';
         } else {
@@ -1946,18 +1635,15 @@ function applyEmpSelection() {
                 displayContainer.textContent = '-';
             } else {
                 tempSelectedEmps.forEach((emp, index) => {
-                    // hidden（社員番号だけ送る）
                     const hidden = document.createElement('input');
                     hidden.type  = 'hidden';
                     hidden.name  = 'shared_employee_numbers[]';
                     hidden.value = emp.no;
                     hiddenContainer.appendChild(hidden);
 
-                    // 表示：社員番号 / 名前
                     const textNode = document.createTextNode(emp.no + ' / ' + emp.name);
                     displayContainer.appendChild(textNode);
 
-                    // 「、」区切り
                     if (index < tempSelectedEmps.length - 1) {
                         displayContainer.appendChild(document.createTextNode('、'));
                     }
@@ -1973,7 +1659,7 @@ function applyEmpSelection() {
         if (tempSelectedCost) {
             hiddenCode.value = tempSelectedCost.code;
             hiddenName.value = tempSelectedCost.name;
-            display.textContent = tempSelectedCost.name;
+            display.textContent = tempSelectedCost.code + ' / ' + tempSelectedCost.name;
             display.style.display = 'inline-block';
         } else {
             hiddenCode.value = '';
@@ -1992,9 +1678,9 @@ function applyEmpSelection() {
 
             if (noEl && lblEl && disp) {
                 noEl.value  = no;
-                lblEl.value = name;
-                disp.textContent = name;
-                disp.style.display = no ? 'inline-block' : 'none';
+                lblEl.value = (no && name) ? (no + ' / ' + name) : '';
+                disp.textContent = (no && name) ? (no + ' / ' + name) : '';
+                disp.style.display = (no && name) ? 'inline-block' : 'none';
             }
         }
 
@@ -2015,10 +1701,8 @@ function applyEmpSelection() {
         }
     }
 
-    // 最後に必ずモーダルを閉じる
     closeEmpModal();
 }
-
 
 // ▼ その他要求：ポップアップA（社員）を使う
 function openPopupAForOther(i) {
@@ -2034,39 +1718,20 @@ function openPopupAForWill(i) {
     openEmpModal('will');
 }
 
-
-    // ▼ その他要求：外から値をセットしたい時用（今は未使用でもOK）
-    function setOtherResponsible(index, empNo, label) {
-        document.getElementById('other-resp-no-' + index).value = empNo;
-        document.getElementById('other-resp-label-' + index).value = label;
-
-        const span = document.getElementById('other-resp-display-' + index);
-        span.textContent = label;
-        span.style.display = 'inline-block';
-    }
-
-
-// ▼ カテゴリは1つだけチェック可能にする
-
-// ===== 登録完了モーダル表示用 =====
+// ===== 更新完了モーダル =====
 function showSuccessModal() {
     const overlay = document.getElementById('success-modal-overlay');
     const modal   = document.getElementById('success-modal');
-
     if (!overlay || !modal) return;
 
-    // Dimmer
     overlay.classList.add('visible', 'active');
     overlay.style.display = 'flex';
     overlay.style.opacity = '1';
 
-    // Modal
     modal.classList.add('visible', 'active');
     modal.style.opacity = '1';
     modal.style.pointerEvents = 'auto';
 }
-
-// OK 押下時
 function closeSuccessModal() {
     const overlay = document.getElementById('success-modal-overlay');
     const modal   = document.getElementById('success-modal');
@@ -2082,59 +1747,10 @@ function closeSuccessModal() {
         modal.style.pointerEvents = 'none';
     }
 
-    // ★ OK で案件一覧に戻したい場合はここで遷移
-    window.location.href = "{{ route('cweb.cases.index') }}";
+    window.location.href = @json(route('cweb.cases.index', ['locale' => request()->route('locale')]));
+
+
 }
-
-    // ▼ 対象製品サブ分類の初期選択だけ、old値を渡すようにしておく
-    document.addEventListener('DOMContentLoaded', function () {
-        const mainSelect = document.getElementById('product-main');
-        const subSelect  = document.getElementById('product-sub');
-        if (!mainSelect || !subSelect) return;
-
-        const initialMain = mainSelect.value;
-        const initialSub  = "{{ $oldSub }}"; // 上の PHP 変数を使う
-
-        refreshProductSubOptions(initialMain, initialSub);
-
-        mainSelect.addEventListener('change', function () {
-            refreshProductSubOptions(this.value, '');
-        });
-    });
-
-    // ▼ 更新完了モーダル（表示トリガーはコントローラ側でセッションフラグを見て実行する想定）
-    function showSuccessModal() {
-        const overlay = document.getElementById('success-modal-overlay');
-        const modal   = document.getElementById('success-modal');
-        if (!overlay || !modal) return;
-
-        overlay.classList.add('visible', 'active');
-        overlay.style.display = 'flex';
-        overlay.style.opacity = '1';
-
-        modal.classList.add('visible', 'active');
-        modal.style.opacity = '1';
-        modal.style.pointerEvents = 'auto';
-    }
-
-    function closeSuccessModal() {
-        const overlay = document.getElementById('success-modal-overlay');
-        const modal   = document.getElementById('success-modal');
-
-        if (overlay) {
-            overlay.classList.remove('visible', 'active');
-            overlay.style.opacity = '0';
-            overlay.style.display = 'none';
-        }
-        if (modal) {
-            modal.classList.remove('visible', 'active');
-            modal.style.opacity = '0';
-            modal.style.pointerEvents = 'none';
-        }
-
-        // 必要なら詳細画面 or 一覧へ戻す
-        window.location.href = "{{ route('cweb.cases.index') }}";
-    }
 </script>
 
 @endsection

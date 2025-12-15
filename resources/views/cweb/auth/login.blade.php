@@ -6,7 +6,7 @@
 </head>
 <body>
     <h1>C-WEB 仮ログイン</h1>
-    <form method="POST" action="{{ route('cweb.login.post') }}">
+    <form method="POST" action="{{ route('cweb.login.post', ['locale' => request()->route('locale') ?? app()->getLocale()]) }}">
         @csrf
         <label>社員番号:
             <input type="text" name="employee_number" value="{{ old('employee_number') }}">

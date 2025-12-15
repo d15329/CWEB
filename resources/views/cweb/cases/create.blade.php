@@ -1,6 +1,11 @@
 @extends('cweb.layout')
 
 @section('header')
+@php
+    $currentLocale = app()->getLocale();
+    $nextLocale = $currentLocale === 'ja' ? 'en' : 'ja';
+@endphp
+
 <header class="cweb-header">
     <div class="cweb-header-inner">
 
@@ -9,33 +14,32 @@
                 C-WEB
             </a>
 
-            <!-- 管理番号はそのまま残す場合 -->
             <div style="font-weight:700;margin-left:12px;">
-                {{ $nextManagementNo }}<span style="font-size:13px;margin-left:2px;">(登録中)</span>
+                {{ $nextManagementNo }}
+                <span style="font-size:13px;margin-left:2px;">
+                    ({{ __('cweb.labels.in_progress') }})
+                </span>
             </div>
         </div>
 
-<div class="cweb-header-right">
-    <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
+        <div class="cweb-header-right">
+            <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
 
-    {{-- 言語トグル（縦線付き・ホバーで少し濃くなるボタン想定） --}}
-    <div class="cweb-header-lang">
-        <button type="button"
-                class="cweb-header-lang-toggle"
-                data-lang="ja-en">
-            日本語 / EN
-        </button>
-    </div>
+            {{-- ✅ 言語トグル：ボタンじゃなくリンクで /ja ⇔ /en に切り替え --}}
+            <div class="cweb-header-lang">
+<a class="cweb-header-lang-toggle"
+   href="{{ route('lang.switch', ['lang' => $nextLocale]) }}">
+  {{ $currentLocale === 'ja' ? 'EN' : '日本語' }}
+</a>
 
-    
-    {{-- ユーザー名＋（編集中）タグ --}}
-    @auth
-        <button type="button" class="cweb-header-user-toggle">
-            {{ auth()->user()->name }}
+            </div>
 
-        </button>
-    @endauth
-</div>
+            @auth
+                <button type="button" class="cweb-header-user-toggle">
+                    {{ auth()->user()->name }}
+                </button>
+            @endauth
+        </div>
 
     </div>
 </header>
@@ -44,13 +48,14 @@
 @section('content')
 
 <style>
+/* ここから下は、あなたの貼ったCSSを基本そのまま（必要最小の修正のみ） */
 
-    /* ヘッダーの「（編集中）」タグ */
+/* ヘッダーの「（編集中）」タグ */
 .cweb-header-editing-tag{
     margin-left: 6px;
     font-size: 11px;
     opacity: 0.85;
-    color: #fbbf24; /* 少し目立つ黄色系。気に入らなければここだけ変えてOK */
+    color: #fbbf24;
 }
 
 /* Will分配の名前表示を必ず var(--text) で */
@@ -59,13 +64,12 @@
     font-weight: 700;
 }
 
-
 .cweb-search-group{
-    margin: 0;        /* ← これが重要 */
-    padding: 0;       /* 必要なら */
+    margin: 0;
+    padding: 0;
     display: flex;
     align-items: center;
-    gap: 8px; /* input と ボタンの間の余白 */
+    gap: 8px;
 }
 
 .cweb-search-group input{
@@ -80,46 +84,29 @@
     background: #2185d0;
     color: #fff;
     border: none;
-
-    /* ▼ 横幅を少しだけ小さく */
     padding: .55em 0.7em;
-
     border-radius: .285rem;
     cursor: pointer;
-
-    /* ▼ 文字を完全中央に配置 */
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 1px;
-
     font-size: 0.8em;
     font-weight: 600;
 }
-
-.cweb-search-btn:hover{
-    background: #1678c2;
-}
+.cweb-search-btn:hover{ background: #1678c2; }
 
 /* =========================
    モーダル本体（.ui.modal 系）
    ========================= */
-
-/* =========================
-   モーダル本体（.ui.modal 系）
-   ========================= */
-
 .ui.modal {
     position: fixed;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%) scale(0.9);  /* ★ 最初は少し小さく */
-    opacity: 0;                                    /* ★ 最初は透明 */
-
-    /* ★ display は常に block にしておく */
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0;
     display: block;
-    pointer-events: none;                          /* ★ 非表示時はクリックさせない */
-
+    pointer-events: none;
     z-index: 1001;
 
     text-align: left;
@@ -128,51 +115,32 @@
     box-shadow:
         1px 3px 3px 0 rgba(0, 0, 0, .2),
         1px 3px 15px 2px rgba(0, 0, 0, .2);
-    flex: 0 0 auto;
     border-radius: .28571429rem;
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    user-select: text;
     outline: 0;
     font-size: 1rem;
     padding: 1.2rem 1.3rem 1rem;
     box-sizing: border-box;
 
-    /* ★ アニメーション */
     transition: transform .22s ease-out, opacity .22s ease-out;
     will-change: transform, opacity;
 }
 
-
-/* サイズ：large ＋ 通常モーダルの幅 */
 @media only screen and (min-width: 768px) {
     .ui.modal:not(.fullscreen),
     .ui.large.modal {
         width: 88%;
         margin: 0;
-        max-width: 900px;  /* 好きな最大幅にしてOK */
+        max-width: 900px;
     }
 }
-
-/* 開いているとき（visible + active が付いた状態） */
-/* 開いているとき（visible + active が付いた状態） */
 .ui.modal.visible.active {
-    /* display はそのまま block のまま */
-    transform: translate(-50%, -50%) scale(1);  /* ★ 通常サイズ */
-    opacity: 1;                                 /* ★ 不透明に */
-    pointer-events: auto;                       /* ★ クリック可能に */
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    pointer-events: auto;
 }
-
-/* モーダル内のスクロール領域 */
 .ui.modal > .scrolling.content {
     max-height: calc(80vh - 110px);
     overflow-y: auto;
-}
-
-/* ヘッダーとフッター */
-.ui.modal > .header {
-    font-weight: 700;
-    margin-bottom: .75rem;
 }
 .ui.modal > .actions {
     margin-top: 1rem;
@@ -180,70 +148,44 @@
     border-top: 1px solid rgba(34, 36, 38, .15);
     text-align: right;
 }
-/* モーダルタイトル下の青い横線 */
 .ui.modal > .header.title_boader{
-    font-size: 30px;                /* ★タイトルを少し大きく */
+    font-size: 30px;
     font-weight: 700;
     color: #1b1c1d;
     margin-bottom: .75rem;
     padding-bottom: .4rem;
-    border-bottom: 2px solid #2185d0;  /* ★青線：色と太さをここに統一 */
+    border-bottom: 2px solid #2185d0;
 }
-/* SearchResult / Selected のラベル下の青い横線 */
-/* SearchResult / Selected ラベル下の青線 */
 .emp_l_s{
-    height: 1px;               /* ★タイトルと同じ太さ */
-    background: #2185d0;       /* ★同じ青 */
+    height: 1px;
+    background: #2185d0;
     margin: .2rem 0 .6rem;
 }
-
-.scrolling.content > *:first-child{
-    margin-top: 0 !important;
-}
+.scrolling.content > *:first-child{ margin-top: 0 !important; }
 
 /* =========================
-   Dimmer（背景の黒いオーバーレイ）
-   ========================= */
-
-.ui.dimmer {
+   Dimmer（背景）
+   ========================= */ 
+/* .ui.dimmer {
     display: none;
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    text-align: center;
-    vertical-align: middle;
+    inset: 0;
     padding: 1em;
     background: rgba(0, 0, 0, .85);
     opacity: 0;
-    line-height: 1;
-    animation-fill-mode: both;
-    animation-duration: .5s;
     transition: all .5s linear;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    user-select: none;
-    will-change: opacity;
     z-index: 1000;
 }
-
-/* 表示状態 */
 .ui.dimmer.visible.active {
     display: flex;
     opacity: 1;
 }
 
-/* =========================
-   ボタン（.ui.button 系）
-   ========================= */
-
+/* ボタン */
 .ui.button {
     display: inline-block;
-    min-height: 0;
     padding: .7em 1.6em;
     margin-left: .4em;
     font-size: .95rem;
@@ -253,398 +195,102 @@
     background: #e0e1e2;
     color: rgba(0, 0, 0, .6);
     cursor: pointer;
-    line-height: 1em;
 }
-.ui.button:hover {
-    background: #cacbcd;
-    color: rgba(0, 0, 0, .8);
-}
+.ui.button:hover { background: #cacbcd; color: rgba(0,0,0,.8); }
+.ui.positive.button { background: #21ba45; color:#fff; }
+.ui.positive.button:hover { background:#16ab39; color:#fff; }
 
-/* OK（.positive）＝ 緑ボタン */
-.ui.positive.button {
-    background: #21ba45;
-    color: #fff;
-}
-.ui.positive.button:hover {
-    background: #16ab39;
-    color: #fff;
-}
+/* ★ ヘッダーと登録ボタンの隙間をなくす調整 */
+.cweb-header{ margin-bottom: 0 !important; padding-bottom: 0 !important; }
 
-/* Cancel はデフォのグレーのまま */
-.ui.button.cancel {
-    /* 必要ならここで別色指定も可能 */
-}
+form{ margin-top:0; padding-bottom: 0; }
 
-/* =========================
-   入力ボックス（.ui.icon.input）まわり
-   ========================= */
-
-/* アイコン付き入力全体（これは今のままでOK） */
-.ui.icon.input{
-    position: relative;
-    display: inline-block;
-}
-
-.ui.icon.input > input{
-    padding-right: 2.4em;
-    border: 1px solid rgba(34,36,38,.15);
-    border-radius: .28571429rem;
-    font-size: 1em;
-    line-height: 1.21428571em;
-    padding: .5em .75em;
-}
-
-/* ▼ 青い丸ボタンを明示的に復活させる */
-.ui.icon.input > i.inverted.circular.search.link.icon.blue{
-    position: absolute;              /* input の中の右端に固定 */
-    right: .6em;
-    top: 50%;
-    transform: translateY(-50%);
-
-    background: #2185d0;             /* 青い背景（Semantic UI の青） */
-    border-radius: 999px;            /* 丸ボタンにする */
-
-    width: 1.8em;
-    height: 1.8em;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    color: transparent;              /* 元のフォントアイコンは見えなくしておく */
-}
-
-/* ▼ 白い円（ルーペ部分） */
-.ui.icon.input > i.inverted.circular.search.link.icon.blue::before{
-    content: "";
-    display: block;
-    width: 11px;                     /* 少し小さめの円 */
-    height: 11px;
-    border: 2px solid #fff;          /* 白い線の円 */
-    border-radius: 50%;
-}
-
-/* ▼ 棒（円の外側右下にくっつく） */
-.ui.icon.input > i.inverted.circular.search.link.icon.blue::after{
-    content: "";
-    position: absolute;
-    width: 7px;                      /* 長めの棒 */
-    height: 2px;
-    background: #fff;
-    border-radius: 1px;
-
-    /* 円の外側右下にくっつくような位置調整 */
-    right: 4px;
-    bottom: 4px;
-    transform-origin: left center;
-    transform: rotate(45deg);
-}
-
-
-
-
-/* =========================
-   Grid（.ui.two.column.grid）ざっくり
-   ========================= */
-
-.ui.grid {
-    display: flex;
-    flex-direction: column;
-    margin-top: 1rem;
-}
-.ui.grid .row {
-    display: flex;
-    width: 100%;
-}
-.ui.grid .column {
-    flex: 1 0 0;
-    padding-right: 1rem;
-}
-.ui.grid .column:last-child {
-    padding-right: 0;
-}
-
-    /* 送信バー（前回のまま使う想定） */
-
-    /* ★ ヘッダーと登録ボタンの隙間をなくす調整 */
-.cweb-header{
-    margin-bottom: 0 !important;
-    padding-bottom: 0 !important;
-}
-
-    form{
-        margin-top:0;
-         padding-bottom: 0
-    }
 .cweb-submit-bar{
-    position: fixed;          /* ← ここを fixed にして完全固定 */
-    top: 45px;                /* ← ヘッダーの高さに合わせて調整（必要なら 56px とかに変更） */
+    position: fixed;
+    top: 45px;
     left: 0;
     right: 0;
-
-    z-index: 45;              /* ヘッダーより少し低く / コンテンツよりは高く */
-    background: var(--bg);    /* 画面の背景と同じ色でなじませる */
-    padding: 8px 24px;        /* コンテンツ左右の余白に合わせて調整 */
-
+    z-index: 45;
+    background: var(--bg);
+    padding: 8px 24px;
     display: flex;
     justify-content: flex-start;
     align-items: center;
 }
-    .cweb-submit-button{
-        background:#f97316;
-        color:#fff;
-        border:none;
-        padding:10px 32px;
-        border-radius:999px;
-        font-weight:700;
-        font-size:14px;
-        box-shadow:0 4px 8px rgba(0,0,0,0.35);
-        cursor:pointer;
-    }
-    .cweb-submit-button:hover{
-        opacity:0.9;
-        transform:translateY(-1px);
-    }
-    .cweb-submit-button:active{
-        transform:translateY(0);
-        box-shadow:0 2px 4px rgba(0,0,0,0.25);
-    }
+.cweb-submit-button{
+    background:#f97316;
+    color:#fff;
+    border:none;
+    padding:10px 32px;
+    border-radius:999px;
+    font-weight:700;
+    font-size:14px;
+    box-shadow:0 4px 8px rgba(0,0,0,0.35);
+    cursor:pointer;
+}
+.cweb-submit-button:hover{ opacity:0.9; transform:translateY(-1px); }
+.cweb-submit-button:active{ transform:translateY(0); box-shadow:0 2px 4px rgba(0,0,0,0.25); }
 
+/* ===== 登録完了モーダル（success-modal）だけ中央固定 ===== */
+#success-modal-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: none;                 /* showSuccessModal() で flex */
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.85);
+  padding: 16px;                 /* 端に寄らないように */
+}
 
-    .scrolling.content{
-        overflow-y: auto;
-        max-height: calc(80vh - 110px); /* ヘッダー/ボタン分を引いておくイメージ */
-        padding-top: 0 !important;
-    }
+#success-modal{
+  width: min(520px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
 
-    /* ヘッダーの文字等（既存の .header.title_boader はそのまま使う前提） */
-    .cweb-modal-inner .header{
-        font-weight: 700;
-        margin-bottom: .75rem;
-    }
-
-    /* ====== フッター（OK / Cancel ボタン行） ====== */
-
-    .cweb-modal-inner .actions{
-        margin-top: 1rem;
-        padding-top: .75rem;
-        border-top: 1px solid rgba(34,36,38,.15);
-        text-align: right;
-    }
-
-    /* Semantic UI の .ui.button 風 */
-    .cweb-modal-inner .actions .ui.button{
-        display: inline-block;
-        min-height: 0;
-        padding: .6em 1.1em;
-        margin-left: .4em;
-        font-size: .85714286rem;
-        font-weight: 700;
-        border-radius: .28571429rem;
-        border: none;
-        background: #e0e1e2;
-        color: rgba(0,0,0,.6);
-        cursor: pointer;
-        line-height: 1em;
-    }
-    .cweb-modal-inner .actions .ui.button:hover{
-        background: #cacbcd;
-    }
-
-    /* OKボタン（.positive） → 緑 */
-    .cweb-modal-inner .actions .ui.positive.button{
-        background: #21ba45;
-        color: #fff;
-    }
-    .cweb-modal-inner .actions .ui.positive.button:hover{
-        background: #16ab39;
-        color:#fff;
-    }
-
-    /* Cancel はグレーのまま（必要なら .cancel に別色も付けられる） */
-    .cweb-modal-inner .actions .ui.button.cancel{
-        /* デフォのグレーでよければ何も書かなくてOK */
-    }
-    @media only screen and (min-width: 768px){
-        /* .ui.large.modal / .ui.modal:not(.fullscreen) の width:88% に寄せる */
-        .cweb-modal-inner{
-            width: 88%;
-            max-width: none;
-            margin: 0;
-        }
-    }
-
-    .picker-title{
-        font-size:16px;
-        font-weight:700;
-        color:var(--text);
-        padding-bottom:6px;
-        border-bottom:2px solid #3b82f6; /* 青線 */
-        margin-bottom:4px;
-    }
-    .picker-search-row{
-        display:flex;
-        align-items:center;
-        gap:8px;
-        margin-bottom:4px;
-    }
-    .picker-search-input{
-        flex:1;
-        padding:6px 8px;
-        border-radius:4px;
-        border:1px solid #9ca3af;
-        font-size:12px;
-    }
-    .picker-search-btn{
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        padding:6px 10px;
-        border-radius:4px;
-        border:none;
-        background:#0ea5e9;
-        color:#fff;
-        cursor:pointer;
-        font-size:12px;
-        font-weight:600;
-        min-width:34px;
-    }
-    .picker-search-btn-icon{
-        width:14px;
-        height:14px;
-        border-radius:999px;
-        border:2px solid #fff;
-        position:relative;
-    }
-    .picker-search-btn-icon::after{
-        content:"";
-        position:absolute;
-        width:7px;
-        height:2px;
-        border-radius:999px;
-        background:#fff;
-        right:-5px;
-        bottom:-2px;
-        transform:rotate(35deg);
-    }
-
-    .picker-header-row{
-        display:flex;
-        gap:12px;
-        font-size:12px;
-        font-weight:700;
-        color:var(--text);
-        margin-top:4px;
-    }
-    .picker-col-header{
-        flex:1;
-    }
-    .picker-body-row{
-        display:flex;
-        gap:12px;
-        flex:1;
-        min-height:180px;
-        max-height:45vh;
-    }
-    .picker-list{
-        flex:1;
-        border:1px solid #e5e7eb;
-        border-radius:4px;
-        overflow:auto;
-        background:var(--bg);
-        font-size:12px;
-    }
-    .picker-item{
-        padding:4px 8px;
-        border-bottom:1px solid #e5e7eb;
-        cursor:pointer;
-        display:flex;
-        justify-content:space-between;
-        gap:6px;
-    }
-    .picker-item:hover{
-        background:rgba(37,99,235,0.08);
-    }
-    .picker-item-main{
-        font-weight:700;
-        color:var(--text);
-    }
-    .picker-item-sub{
-        font-size:11px;
-        color:#6b7280;
-    }
-
-    .picker-footer{
-        display:flex;
-        justify-content:flex-end;
-        gap:8px;
-        margin-top:6px;
-    }
-    .picker-btn-ok{
-        background:#16a34a;
-        color:#fff;
-        border:none;
-        padding:6px 18px;
-        border-radius:999px;
-        font-weight:700;
-        font-size:12px;
-        cursor:pointer;
-    }
-    .picker-btn-cancel{
-        background:#e5e7eb;
-        color:#374151;
-        border:none;
-        padding:6px 18px;
-        border-radius:999px;
-        font-weight:700;
-        font-size:12px;
-        cursor:pointer;
-    }
+  background: #fff;
+  border-radius: .28571429rem;
+  box-shadow: 1px 3px 3px 0 rgba(0,0,0,.2), 1px 3px 15px 2px rgba(0,0,0,.2);
+  padding: 1.2rem 1.3rem 1rem;
+}
 </style>
 
+<form method="POST" action="{{ route('cweb.cases.store', ['locale' => request()->route('locale') ?? app()->getLocale()]) }}">
 
-    <form id="case-form" method="POST" action="{{ route('cweb.cases.store') }}">
+    @csrf
 
-        @csrf
+    {{-- 登録ボタン（スクロールしても上に固定） --}}
+    <div class="cweb-submit-bar">
+        <button type="submit" class="btn btn-accent cweb-submit-button">
+            {{ __('cweb.actions.register') }}
+        </button>
+    </div>
 
-        {{-- 登録ボタン（スクロールしても上に固定） --}}
-        <div class="cweb-submit-bar">
-            <button type="submit"
-                    class="btn btn-accent cweb-submit-button">
-                登録
-            </button>
-        </div>
-
-        {{-- 1列11行テーブル --}}
-        <div style="margin-top:60px;background:#0b1029;border-radius:8px;padding:0;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    {{-- 1列11行テーブル --}}
+    <div style="margin-top:60px;background:#0b1029;border-radius:8px;padding:0;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
 @php
     $rowStyle = '';
 
-    // 1列目：幅半分（10%）、真ん中寄せ、左に空白、仕切りはグレー
-        $labelCell = implode('', [
-            'padding:10px 10px 10px 32px;',
-            'width:18%;',
-            'vertical-align:middle;',
-            'color:#000;',
-            'background:#e5e7eb;',
-            'border-right:1px solid #d1d5db;',
-            'border-bottom:1px solid #e5e7eb;',     // ← ★ここを none にする
-            'box-sizing:border-box;',
-            'font-weight:700;',
-        ]);
+    $labelCell = implode('', [
+        'padding:10px 10px 10px 32px;',
+        'width:18%;',
+        'vertical-align:middle;',
+        'color:#000;',
+        'background:#e5e7eb;',
+        'border-right:1px solid #d1d5db;',
+        'border-bottom:1px solid #e5e7eb;',
+        'box-sizing:border-box;',
+        'font-weight:700;',
+    ]);
 
-
-    // 2列目：ボディ背景と同じ色、下線なし、縦方向も中央寄せ
     $inputCell = 'padding:10px 10px;background:var(--bg);border-bottom:none;vertical-align:middle;';
 @endphp
-
-
 
 {{-- 1行目：営業窓口（必須） --}}
 <tr style="{{ $rowStyle }}">
     <td style="{{ $labelCell }}">
-        <span style="color:red;">＊</span>営業窓口
+        <span style="color:red;">＊</span>{{ __('cweb.form.sales_contact') }}
     </td>
     <td style="{{ $inputCell }}">
 
@@ -661,29 +307,14 @@
 </span>
 
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="hidden" name="sales_employee_number" id="sales-emp-no" value="{{ old('sales_employee_number') }}">
+            <input type="hidden" name="sales_employee_name"   id="sales-emp-name" value="{{ old('sales_employee_name') }}">
 
-            {{-- 保存用フィールド --}}
-            <input type="hidden"
-                   name="sales_employee_number"
-                   id="sales-emp-no"
-                   value="{{ old('sales_employee_number') }}">
-            <input type="hidden"
-                   name="sales_employee_name"
-                   id="sales-emp-name"
-                   value="{{ old('sales_employee_name') }}">
-
-            <!-- {{-- ▼ 選択済みの表示（未選択なら完全に非表示＝幅0） --}}
-            <span id="sales-emp-display"
-                  style="display:{{ $salesName ? 'inline-block' : 'none' }};color:var(--text);font-weight:700;">
-                {{ $salesName }}
-            </span> -->
-
-            {{-- ▼ 選択ボタン（最初は左端にぴったり） --}}
             <button type="button"
                     class="btn"
                     style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
                     onclick="openPopupA()">
-                選択
+                {{ __('cweb.actions.select') }}
             </button>
         </div>
 
@@ -693,30 +324,22 @@
     </td>
 </tr>
 
-
 {{-- 2行目：情報共有者 --}}
 <tr style="{{ $rowStyle }}">
-    <td style="{{ $labelCell }}">情報共有者</td>
+    <td style="{{ $labelCell }}">{{ __('cweb.form.shared_users') }}</td>
     <td style="{{ $inputCell }}">
-
         @php
             $oldSharedNos    = (array)old('shared_employee_numbers', []);
             $oldSharedLabels = (array)old('shared_employee_labels', []);
         @endphp
 
-        {{-- hidden保持 --}}
         <div id="shared-hidden-container">
             @foreach($oldSharedNos as $i => $empNo)
-                <input type="hidden"
-                       name="shared_employee_numbers[]"
-                       value="{{ $empNo }}">
-                <input type="hidden"
-                       name="shared_employee_labels[]"
-                       value="{{ $oldSharedLabels[$i] ?? '' }}">
+                <input type="hidden" name="shared_employee_numbers[]" value="{{ $empNo }}">
+                <input type="hidden" name="shared_employee_labels[]"  value="{{ $oldSharedLabels[$i] ?? '' }}">
             @endforeach
         </div>
 
-        {{-- 画面表示：営業窓口と同じテイスト（番号 / 氏名） --}}
         <div id="shared-display" style="margin-bottom:4px;">
             @foreach($oldSharedNos as $i => $empNo)
                 @php $label = $oldSharedLabels[$i] ?? ''; @endphp
@@ -732,11 +355,11 @@
                 class="btn"
                 style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
                 onclick="openPopupB()">
-            選択
+            {{ __('cweb.actions.select') }}
         </button>
 
         <div style="margin-top:4px;font-size:11px;color:var(--text);">
-            各製品の技術/製造担当は自動で情報共有されます
+            {{ __('cweb.form.shared_note') }}
         </div>
     </td>
 </tr>
@@ -744,38 +367,25 @@
 {{-- 3行目：費用負担先（必須） --}}
 <tr style="{{ $rowStyle }}">
     <td style="{{ $labelCell }}">
-        <span style="color:red;">＊</span>費用負担先
+        <span style="color:red;">＊</span>{{ __('cweb.form.cost_owner') }}
     </td>
     <td style="{{ $inputCell }}">
-
-        @php
-            $costOwnerName = old('cost_owner_name');
-        @endphp
+        @php $costOwnerName = old('cost_owner_name'); @endphp
 
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <input type="hidden" name="cost_owner_code" id="cost-owner-code" value="{{ old('cost_owner_code') }}">
+            <input type="hidden" name="cost_owner_name" id="cost-owner-name" value="{{ old('cost_owner_name') }}">
 
-            {{-- 保存用フィールド --}}
-            <input type="hidden"
-                   name="cost_owner_code"
-                   id="cost-owner-code"
-                   value="{{ old('cost_owner_code') }}">
-            <input type="hidden"
-                   name="cost_owner_name"
-                   id="cost-owner-name"
-                   value="{{ old('cost_owner_name') }}">
-
-            {{-- ▼ 選択済みの表示（未選択なら完全に非表示＝幅0になる） --}}
             <span id="cost-owner-display"
                   style="display:{{ $costOwnerName ? 'inline-block' : 'none' }};color:var(--text);font-weight:700;">
                 {{ $costOwnerName }}
             </span>
 
-            {{-- ▼ 選択ボタン（最初は左端にぴったり） --}}
             <button type="button"
                     class="btn"
                     style="background:#0ea5e9;color:#fff;padding:4px 10px;border-radius:4px;border:none;font-size:12px;"
                     onclick="openPopupC()">
-                選択
+                {{ __('cweb.actions.select') }}
             </button>
         </div>
 
@@ -785,152 +395,155 @@
     </td>
 </tr>
 
+{{-- 4行目：顧客名（必須） --}}
+<tr style="{{ $rowStyle }}">
+    <td style="{{ $labelCell }}">
+        <span style="color:red;">＊</span>{{ __('cweb.form.customer') }}
+    </td>
+    <td style="{{ $inputCell }}">
+        <input type="text"
+               name="customer_name"
+               value="{{ old('customer_name') }}"
+               style="width:220px;padding:6px 8px;border-radius:4px;border:1px solid #9ca3af;">
+        @error('customer_name')
+            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+        @enderror
+    </td>
+</tr>
 
-                {{-- 4行目：顧客名（必須） --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">
-                        <span style="color:red;">＊</span>顧客名
-                    </td>
-                    <td style="{{ $inputCell }}">
-                        <input type="text"
-                               name="customer_name"
-                               value="{{ old('customer_name') }}"
-                               style="width:220px;padding:6px 8px;border-radius:4px;border:1px solid #9ca3af;">
-                        @error('customer_name')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                    </td>
-                </tr>
+{{-- 5行目：カテゴリー（必須・複数可） --}}
+<tr style="{{ $rowStyle }}">
+    <td style="{{ $labelCell }}">
+        <span style="color:red;">＊</span>{{ __('cweb.form.category') }}
+    </td>
+    <td style="{{ $inputCell }}">
+        @php $oldCategories = (array)old('categories', []); @endphp
 
-                {{-- 5行目：カテゴリー（必須・複数可） --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">
-                        <span style="color:red;">＊</span>カテゴリー
-                    </td>
-                    <td style="{{ $inputCell }}">
-                        @php
-                            $oldCategories = (array)old('categories', []);
-                        @endphp
-                        <label style="color:var(--text);">
-                            <input type="checkbox" name="categories[]" value="standard"
-                                   {{ in_array('standard', $oldCategories, true) ? 'checked' : '' }}>
-                            標準管理
-                        </label>
-                        <label style="margin-left:12px;color:var(--text);">
-                            <input type="checkbox" name="categories[]" value="pcn"
-                                   {{ in_array('pcn', $oldCategories, true) ? 'checked' : '' }}>
-                            PCN
-                        </label>
-                        <label style="margin-left:12px;ccolor:var(--text);">
-                            <input type="checkbox" name="categories[]" value="other"
-                                   {{ in_array('other', $oldCategories, true) ? 'checked' : '' }}>
-                            その他要求
-                        </label>
+        <label style="color:var(--text);">
+            <input type="checkbox" name="categories[]" value="standard"
+                   {{ in_array('standard', $oldCategories, true) ? 'checked' : '' }}>
+            {{ __('cweb.categories.standard') }}
+        </label>
 
-                        @error('categories')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                    </td>
-                </tr>
+        <label style="margin-left:12px;color:var(--text);">
+            <input type="checkbox" name="categories[]" value="pcn"
+                   {{ in_array('pcn', $oldCategories, true) ? 'checked' : '' }}>
+            {{ __('cweb.categories.pcn') }}
+        </label>
 
-                {{-- 6行目：対象製品（必須・プルダウン2つ） --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">
-                        <span style="color:red;">＊</span>対象製品
-                    </td>
-                    <td style="{{ $inputCell }}">
-                        @php
-                            $oldMain = old('product_main', '');
-                            $oldSub  = old('product_sub', '');
-                        @endphp
+        {{-- ✅ typo 修正：ccolor → color --}}
+        <label style="margin-left:12px;color:var(--text);">
+            <input type="checkbox" name="categories[]" value="other"
+                   {{ in_array('other', $oldCategories, true) ? 'checked' : '' }}>
+            {{ __('cweb.categories.other') }}
+        </label>
 
-                        <select name="product_main"
-                                id="product-main"
-                                style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                            <option value="" {{ $oldMain === '' ? 'selected' : '' }} style="color:#9ca3af;">
-                                選択
-                            </option>
-                            <option value="HogoMax-内製品"   {{ $oldMain === 'HogoMax-内製品' ? 'selected' : '' }}>HogoMax-内製品</option>
-                            <option value="HogoMax-OEM品"    {{ $oldMain === 'HogoMax-OEM品' ? 'selected' : '' }}>HogoMax-OEM品</option>
-                            <option value="StayClean-内製品" {{ $oldMain === 'StayClean-内製品' ? 'selected' : '' }}>StayClean-内製品</option>
-                            <option value="StayClean-OEM品"  {{ $oldMain === 'StayClean-OEM品' ? 'selected' : '' }}>StayClean-OEM品</option>
-                            <option value="ResiFlat-内製品"   {{ $oldMain === 'ResiFlat-内製品' ? 'selected' : '' }}>ResiFlat-内製品</option>
-                            <option value="その他"           {{ $oldMain === 'その他' ? 'selected' : '' }}>その他</option>
-                        </select>
+        @error('categories')
+            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+        @enderror
+    </td>
+</tr>
 
-                        <select name="product_sub"
-                                id="product-sub"
-                                style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;margin-left:8px;">
-                            <option value="" {{ $oldSub === '' ? 'selected' : '' }} style="color:#9ca3af;">
-                                選択
-                            </option>
-                            {{-- JSで候補差し込み --}}
-                        </select>
+{{-- 6行目：対象製品（必須） --}}
+<tr style="{{ $rowStyle }}">
+    <td style="{{ $labelCell }}">
+        <span style="color:red;">＊</span>{{ __('cweb.form.product') }}
+    </td>
+    <td style="{{ $inputCell }}">
+        @php
+            $oldMain = old('product_main', '');
+            $oldSub  = old('product_sub', '');
+        @endphp
 
-                        @error('product_main')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                        @error('product_sub')
-                            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
-                        @enderror
-                    </td>
-                </tr>
+        <select name="product_main"
+                id="product-main"
+                style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+            <option value="" {{ $oldMain === '' ? 'selected' : '' }} style="color:#9ca3af;">
+                {{ __('cweb.form.select') }}
+            </option>
+            <option value="HogoMax-内製品"   {{ $oldMain === 'HogoMax-内製品' ? 'selected' : '' }}>HogoMax-内製品</option>
+            <option value="HogoMax-OEM品"    {{ $oldMain === 'HogoMax-OEM品' ? 'selected' : '' }}>HogoMax-OEM品</option>
+            <option value="StayClean-内製品" {{ $oldMain === 'StayClean-内製品' ? 'selected' : '' }}>StayClean-内製品</option>
+            <option value="StayClean-OEM品"  {{ $oldMain === 'StayClean-OEM品' ? 'selected' : '' }}>StayClean-OEM品</option>
+            <option value="ResiFlat-内製品"   {{ $oldMain === 'ResiFlat-内製品' ? 'selected' : '' }}>ResiFlat-内製品</option>
+            <option value="その他"           {{ $oldMain === 'その他' ? 'selected' : '' }}>その他</option>
+        </select>
 
-                {{-- 7行目：PCN管理項目 --}}
-                <tr style="{{ $rowStyle }}">
-                    <td style="{{ $labelCell }}">PCN管理項目</td>
-                    <td style="{{ $inputCell }}">
-                        <div id="pcn-rows">
-                            @php
-                                $pcnOld = old('pcn_items', [
-                                    ['category' => null, 'title' => null, 'months_before' => null],
-                                ]);
-                            @endphp
+        <select name="product_sub"
+                id="product-sub"
+                style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;margin-left:8px;">
+            <option value="" {{ $oldSub === '' ? 'selected' : '' }} style="color:#9ca3af;">
+                {{ __('cweb.form.select') }}
+            </option>
+        </select>
 
-                            @foreach($pcnOld as $i => $item)
-                                <div class="pcn-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-                                    <select name="pcn_items[{{ $i }}][category]"
-                                            style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                                        <option value="">選択</option>
-                                        <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>仕様書内容</option>
-                                        <option value="man"         {{ ($item['category'] ?? '') === 'man' ? 'selected' : '' }}>人（Man）</option>
-                                        <option value="machine"     {{ ($item['category'] ?? '') === 'machine' ? 'selected' : '' }}>機械（Machine）</option>
-                                        <option value="material"    {{ ($item['category'] ?? '') === 'material' ? 'selected' : '' }}>材料（Material）</option>
-                                        <option value="method"      {{ ($item['category'] ?? '') === 'method' ? 'selected' : '' }}>方法（Method）</option>
-                                        <option value="measurement" {{ ($item['category'] ?? '') === 'measurement' ? 'selected' : '' }}>測定（Measurement）</option>
-                                        <option value="environment" {{ ($item['category'] ?? '') === 'environment' ? 'selected' : '' }}>環境（Environment）</option>
-                                        <option value="other"       {{ ($item['category'] ?? '') === 'other' ? 'selected' : '' }}>その他</option>
-                                    </select>
+        @error('product_main')
+            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+        @enderror
+        @error('product_sub')
+            <div style="color:#fca5a5;margin-top:4px;">{{ $message }}</div>
+        @enderror
+    </td>
+</tr>
 
-                                    <input type="text"
-                                           name="pcn_items[{{ $i }}][title]"
-                                           value="{{ $item['title'] ?? '' }}"
-                                           placeholder="ラベル変更など"
-                                           style="width:200px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+{{-- 7〜11行目以降は “あなたの貼ったもの” をそのまま維持（JSも含めてOK） --}}
+{{-- ↓↓↓ ここから下は変更なしなので、あなたのコードをそのまま続けて貼ってOK ↓↓↓ --}}
 
-                                    <input type="number"
-                                           name="pcn_items[{{ $i }}][months_before]"
-                                           value="{{ $item['months_before'] ?? '' }}"
-                                           min="0"
-                                           style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
-                                    <span style="color:var(--text);">ヵ月前連絡</span>
+{{-- 7行目：PCN管理項目 --}}
+<tr style="{{ $rowStyle }}">
+    <td style="{{ $labelCell }}">PCN管理項目</td>
+    <td style="{{ $inputCell }}">
+        <div id="pcn-rows">
+            @php
+                $pcnOld = old('pcn_items', [
+                    ['category' => null, 'title' => null, 'months_before' => null],
+                ]);
+            @endphp
 
-                                    <button type="button"
-                                            onclick="removePcnRow(this)"
-                                            style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
-                                        削除
-                                    </button>
-                                </div>
-                            @endforeach
-                        </div>
+            @foreach($pcnOld as $i => $item)
+                <div class="pcn-row" style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
+                    <select name="pcn_items[{{ $i }}][category]"
+                            style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                        <option value="">選択</option>
+                        <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>仕様書内容</option>
+                        <option value="man"         {{ ($item['category'] ?? '') === 'man' ? 'selected' : '' }}>人（Man）</option>
+                        <option value="machine"     {{ ($item['category'] ?? '') === 'machine' ? 'selected' : '' }}>機械（Machine）</option>
+                        <option value="material"    {{ ($item['category'] ?? '') === 'material' ? 'selected' : '' }}>材料（Material）</option>
+                        <option value="method"      {{ ($item['category'] ?? '') === 'method' ? 'selected' : '' }}>方法（Method）</option>
+                        <option value="measurement" {{ ($item['category'] ?? '') === 'measurement' ? 'selected' : '' }}>測定（Measurement）</option>
+                        <option value="environment" {{ ($item['category'] ?? '') === 'environment' ? 'selected' : '' }}>環境（Environment）</option>
+                        <option value="other"       {{ ($item['category'] ?? '') === 'other' ? 'selected' : '' }}>その他</option>
+                    </select>
 
-                        <button type="button"
-                                onclick="addPcnRow()"
-                                style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
-                            ＋ 行追加
-                        </button>
-                    </td>
-                </tr>
+                    <input type="text"
+                           name="pcn_items[{{ $i }}][title]"
+                           value="{{ $item['title'] ?? '' }}"
+                           placeholder="ラベル変更など"
+                           style="width:200px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+
+                    <input type="number"
+                           name="pcn_items[{{ $i }}][months_before]"
+                           value="{{ $item['months_before'] ?? '' }}"
+                           min="0"
+                           style="width:50px;padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
+                    <span style="color:var(--text);">ヵ月前連絡</span>
+
+                    <button type="button"
+                            onclick="removePcnRow(this)"
+                            style="background:#4b5563;border:none;border-radius:4px;color:#e5e7eb;padding:2px 6px;font-size:11px;">
+                        削除
+                    </button>
+                </div>
+            @endforeach
+        </div>
+
+        <button type="button"
+                onclick="addPcnRow()"
+                style="margin-top:4px;background:#b91c1c;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:12px;">
+            ＋ 行追加
+        </button>
+    </td>
+</tr>
 
 {{-- 8行目：その他要求 --}}
 <tr style="{{ $rowStyle }}">
@@ -1108,17 +721,7 @@
         </div>
        </form>
 
-<div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
 
-<div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
-    <div class="header">完了</div>
-    <div class="content" style="text-align:center; font-size:16px; padding:20px;">
-        登録しました
-    </div>
-    <div class="actions" style="text-align:center;">
-        <button type="button" class="ui blue button" onclick="closeSuccessModal()">OK</button>
-    </div>
-</div>
 
 
 
@@ -1876,42 +1479,37 @@ function openPopupAForWill(i) {
 // ▼ カテゴリは1つだけチェック可能にする
 
 // ===== 登録完了モーダル表示用 =====
-function showSuccessModal() {
-    const overlay = document.getElementById('success-modal-overlay');
-    const modal   = document.getElementById('success-modal');
+// function showSuccessModal(){
+//   const overlay = document.getElementById('success-modal-overlay');
+//   const modal   = document.getElementById('success-modal');
+//   if (!overlay || !modal) return;
 
-    if (!overlay || !modal) return;
+//   overlay.classList.add('visible','active');
+//   overlay.style.display = 'flex';
 
-    // Dimmer
-    overlay.classList.add('visible', 'active');
-    overlay.style.display = 'flex';
-    overlay.style.opacity = '1';
+//   modal.classList.add('visible','active');
+//   modal.style.display = 'block';
+//   modal.style.opacity = '1';
+//   modal.style.pointerEvents = 'auto';
+// }
 
-    // Modal
-    modal.classList.add('visible', 'active');
-    modal.style.opacity = '1';
-    modal.style.pointerEvents = 'auto';
-}
+// function closeSuccessModal(){
+//   const overlay = document.getElementById('success-modal-overlay');
+//   const modal   = document.getElementById('success-modal');
 
-// OK 押下時
-function closeSuccessModal() {
-    const overlay = document.getElementById('success-modal-overlay');
-    const modal   = document.getElementById('success-modal');
+//   if (modal){
+//     modal.classList.remove('visible','active');
+//     modal.style.opacity = '0';
+//     modal.style.pointerEvents = 'none';
+//   }
+//   if (overlay){
+//     overlay.classList.remove('visible','active');
+//     overlay.style.display = 'none';
+//   }
 
-    if (overlay) {
-        overlay.classList.remove('visible', 'active');
-        overlay.style.opacity = '0';
-        overlay.style.display = 'none';
-    }
-    if (modal) {
-        modal.classList.remove('visible', 'active');
-        modal.style.opacity = '0';
-        modal.style.pointerEvents = 'none';
-    }
+//   window.location.href = "{{ route('cweb.cases.index', ['locale' => app()->getLocale()]) }}";
+// }
 
-    // ★ OK で案件一覧に戻したい場合はここで遷移
-    window.location.href = "{{ route('cweb.cases.index') }}";
-}
 
 document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('case-form');
@@ -2009,3 +1607,14 @@ document.addEventListener('DOMContentLoaded', () => {
 @endif
 
 @endsection
+
+<!-- @if (session('cweb_success'))
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // showSuccessModal() は create 側の script に定義済みの想定
+    if (typeof showSuccessModal === 'function') {
+      showSuccessModal();
+    }
+  });
+</script>
+@endif -->

@@ -1,14 +1,31 @@
 @extends('cweb.layout')
 
+@php
+    use App\Models\User;
+
+    // ===== Locale =====
+    $currentLocale = app()->getLocale();
+    $nextLocale    = $currentLocale === 'ja' ? 'en' : 'ja';
+    $listSep       = $currentLocale === 'ja' ? '、' : ', ';
+
+    // ===== Status label（多言語）=====
+    $statusLabel = match($case->status ?? '') {
+        'active' => __('cweb.status.active'),
+        'closed' => __('cweb.status.closed'),
+        default  => __('cweb.status.unknown'),
+    };
+@endphp
+
 {{-- ▼ ヘッダー（create と同じ構成） --}}
 @section('header')
 <header class="cweb-header">
     <div class="cweb-header-inner">
 
         <div class="cweb-header-left">
-            <a href="{{ route('cweb.cases.index') }}" class="cweb-brand-link">
-                C-WEB
-            </a>
+<a href="{{ route('cweb.cases.index', ['locale' => $currentLocale]) }}" class="cweb-brand-link">
+    C-WEB
+</a>
+
 
             {{-- 管理番号 + ステータス --}}
             <div style="font-weight:700;margin-left:12px;">
@@ -17,13 +34,24 @@
                     ({{ $statusLabel }})
                 </span>
             </div>
-        </div> 
+        </div>
 
         <div class="cweb-header-right">
             <a href="http://qweb.discojpn.local/" class="btn btn-qweb">Q-WEB</a>
-            <span style="margin:0 12px;">日本語 / EN</span>
+
+            {{-- ✅ 言語トグル：/ja ⇔ /en --}}
+            <div class="cweb-header-lang">
+                <a class="cweb-header-lang-toggle"
+                   href="{{ route('cweb.cases.show', ['locale' => $nextLocale, 'case' => $case->id]) }}"
+>
+                    {{ $currentLocale === 'ja' ? 'EN' : '日本語' }}
+                </a>
+            </div>
+
             @auth
-                <span>{{ auth()->user()->name }}</span>
+                <button type="button" class="cweb-header-user-toggle">
+                    {{ auth()->user()->name }}
+                </button>
             @endauth
         </div>
 
@@ -31,25 +59,15 @@
 </header>
 @endsection
 
-
 @section('content')
 
 @php
-    use App\Models\User;
-
-    // ▼ カテゴリー
+    // ▼ カテゴリー（多言語）
     $cats = [];
-    if ($case->category_standard ?? false) $cats[] = '標準管理';
-    if ($case->category_pcn ?? false)      $cats[] = 'PCN';
-    if ($case->category_other ?? false)    $cats[] = 'その他要求';
+    if ($case->category_standard ?? false) $cats[] = __('cweb.categories.standard');
+    if ($case->category_pcn ?? false)      $cats[] = __('cweb.categories.pcn');
+    if ($case->category_other ?? false)    $cats[] = __('cweb.categories.other');
     $categoryLabel = $cats ? implode(' / ', $cats) : '-';
-
-    // ▼ ステータス
-    $statusLabel = match($case->status ?? '') {
-        'active' => 'アクティブ',
-        'closed' => '廃止',
-        default  => '不明',
-    };
 
     // ▼ 対象製品
     $productLabel = trim(($case->product_group ?? '').' '.($case->product_code ?? ''));
@@ -83,21 +101,6 @@
     $otherEmployees = $otherEmpNumbers
         ? User::whereIn('employee_number', $otherEmpNumbers)->get()->keyBy('employee_number')
         : collect();
-
-    // ▼ まだ残っている style="{{ $labelCell }}" / "{{ $inputCell }}" 対策
-    $labelCell = implode('', [
-        'padding:10px 10px 10px 32px;',
-        'width:30%;',
-        'vertical-align:middle;',
-        'color:#000;',
-        'background:#e5e7eb;',
-        'border-right:1px solid #d1d5db;',
-        'border-bottom:none;',
-        'box-sizing:border-box;',
-        'font-weight:700;',
-    ]);
-
-    $inputCell = 'padding:10px 10px;background:var(--bg);border-bottom:none;vertical-align:middle;color:var(--text);';
 
     /* =========================
        ここから送信先候補の計算
@@ -163,7 +166,7 @@
     // ▼ その他要求対応者社員番号
     $otherReqEmpNos = $otherReqs->pluck('responsible_employee_number')->filter()->unique()->values()->all();
 
-    // ▼ 営業窓口の社員番号（既に $salesEmployeeNumber にある）
+    // ▼ 営業窓口の社員番号
     $salesEmpNo = $salesEmployeeNumber;
 
     // ▼ メール送信候補社員番号を集約
@@ -195,7 +198,6 @@
                 'checked' => $defaultChecked,
             ];
         } else {
-            // どこかのロールで default=true なら優先
             if ($defaultChecked) {
                 $mailRecipients[$empNo]['checked'] = true;
             }
@@ -203,26 +205,11 @@
     };
 
     // ルールに従って登録
-    if ($creatorEmpNo) {
-        // 登録者：デフォルトではチェックしない
-        $addRecipient($creatorEmpNo, false);
-    }
-    if ($salesEmpNo) {
-        // 営業窓口：デフォルトチェック
-        $addRecipient($salesEmpNo, true);
-    }
-    foreach ($sharedEmpNos as $empNo) {
-        // 情報共有者：デフォルトチェック
-        $addRecipient($empNo, true);
-    }
-    foreach ($otherReqEmpNos as $empNo) {
-        // その他要求対応者：デフォルトチェック
-        $addRecipient($empNo, true);
-    }
-    foreach ($productOwners as $empNo) {
-        // 当該製品の担当者：デフォルトチェック
-        $addRecipient($empNo, true);
-    }
+    if ($creatorEmpNo) $addRecipient($creatorEmpNo, false); // 登録者：デフォルトOFF
+    if ($salesEmpNo)   $addRecipient($salesEmpNo, true);    // 営業窓口：デフォルトON
+    foreach ($sharedEmpNos as $empNo)    $addRecipient($empNo, true); // 情報共有者：ON
+    foreach ($otherReqEmpNos as $empNo)  $addRecipient($empNo, true); // その他要求：ON
+    foreach ($productOwners as $empNo)   $addRecipient($empNo, true); // 製品担当：ON
 @endphp
 
 <style>
@@ -244,10 +231,6 @@
         align-items:center;
         gap:8px;
     }
-    .cweb-submit-bar-right{
-        display:flex;
-        align-items:center;
-    }
     .cweb-submit-button{
         background:#f97316;
         color:#fff;
@@ -263,54 +246,26 @@
         justify-content:center;
         white-space:nowrap;
     }
-    .cweb-submit-button:hover{
-        opacity:0.9;
-        transform:translateY(-1px);
-    }
-    .cweb-submit-button:active{
-        transform:translateY(0);
-        box-shadow:0 2px 4px rgba(0,0,0,0.25);
-    }
-    .cweb-btn-edit{
-        background:#f97316;
-    }
-    .cweb-btn-delete{
-        background:#dc2626;
-    }
-    .cweb-btn-folder{
-        background:#22c55e;
-    }
+    .cweb-submit-button:hover{ opacity:0.9; transform:translateY(-1px); }
+    .cweb-submit-button:active{ transform:translateY(0); box-shadow:0 2px 4px rgba(0,0,0,0.25); }
+
+    .cweb-btn-edit{ background:#f97316; }
+    .cweb-btn-delete{ background:#dc2626; }
+    .cweb-btn-folder{ background:#22c55e; }
 
     /* ===== 本文2カラム ===== */
     .cweb-case-layout{
-        margin-top:60px;  /* ボタンバー高さぶん */
+        margin-top:60px;
         display:flex;
         flex-wrap:nowrap;
         gap:16px;
         align-items:flex-start;
         overflow-x:auto;
     }
-    .cweb-case-left{
-        flex:1 1 auto;
-        min-width:0;
-    }
-    .cweb-case-right{
-        flex:0 0 31.25%;
-        min-width:320px;
-    }
+    .cweb-case-left{ flex:1 1 auto; min-width:0; }
+    .cweb-case-right{ flex:0 0 31.25%; min-width:320px; }
 
-    .cweb-case-table-wrapper{
-        background:transparent;
-        border-radius:0;
-        padding:0;
-    }
-    .cweb-case-table{
-        width:100%;
-        border-collapse:separate;
-        border-spacing:0;
-        border:none;
-        font-size:13px;
-    }
+    .cweb-case-table{ width:100%; border-collapse:separate; border-spacing:0; border:none; font-size:13px; }
 
     .cweb-case-th{
         padding:10px 10px 10px 32px;
@@ -331,11 +286,6 @@
         vertical-align:middle;
         color:var(--text);
     }
-    @media (prefers-color-scheme: dark){
-        .cweb-case-td{
-            background:var(--bg);
-        }
-    }
 
     .cweb-comment-container{
         width:100%;
@@ -343,7 +293,6 @@
         box-sizing:border-box;
         text-align:left;
     }
-
     .cweb-comment-container textarea{
         width:100%;
         min-height:5rem;
@@ -354,130 +303,61 @@
         font-size:1rem;
         box-sizing:border-box;
     }
-
-    .cweb-comment-container .ui.fixed.items{
-        text-align:right;
-        margin-top:4px;
-        margin-bottom:8px;
-    }
-
+    .cweb-comment-container .ui.fixed.items{ text-align:right; margin-top:4px; margin-bottom:8px; }
     .cweb-comment-container .ui.blue.button.menu_btn{
-        background:#2185d0;
-        border:none;
-        color:#fff;
-        padding:.6em 1.2em;
-        border-radius:.28571429rem;
-        font-weight:600;
-        font-size:.9rem;
-        cursor:pointer;
-        display:inline-flex;
-        align-items:center;
-        gap:.4em;
+        background:#2185d0; border:none; color:#fff;
+        padding:.6em 1.2em; border-radius:.28571429rem;
+        font-weight:600; font-size:.9rem; cursor:pointer;
+        display:inline-flex; align-items:center; gap:.4em;
     }
-    .cweb-comment-container .ui.blue.button.menu_btn:hover{
-        background:#1678c2;
-    }
+    .cweb-comment-container .ui.blue.button.menu_btn:hover{ background:#1678c2; }
 
-    .cweb-comment-list{
-        margin-top:8px;
-    }
+    .cweb-comment-list{ margin-top:8px; }
+    .cweb-comment-item{ border-top:1px solid #e5e7eb; padding:6px 0 8px; }
+    .cweb-comment-body{ font-size:14px; line-height:1.4; color:var(--text); white-space:pre-wrap; word-break:break-word; }
 
-    .cweb-comment-item{
-        border-top:1px solid #e5e7eb;
-        padding:6px 0 8px;
-    }
-
-    .cweb-comment-body{
-        font-size:14px;
-        line-height:1.4;
-        color:var(--text);
-        white-space:pre-wrap;
-        word-break:break-word;
-    }
-
-    .cweb-comment-meta-row{
-        display:flex;
-        align-items:flex-start;
-        margin-top:2px;
-    }
-
-    .cweb-comment-icon{
-        flex:0 0 auto;
-        margin-right:4px;
-        line-height:1.4;
-    }
-
-    .cweb-comment-meta{
-        flex:1 1 auto;
-        font-size:11px;
-        color:var(--muted);
-    }
+    .cweb-comment-meta-row{ display:flex; align-items:flex-start; margin-top:2px; }
+    .cweb-comment-icon{ flex:0 0 auto; margin-right:4px; line-height:1.4; }
+    .cweb-comment-meta{ flex:1 1 auto; font-size:11px; color:var(--muted); }
 
     /* ▼ 廃止ポップアップ：オーバーレイ */
-    #case-delete-overlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,.4);
-        z-index: 1000;
-        display: none;
-    }
+    #case-delete-overlay{ position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; display: none; }
 
     /* ▼ 廃止ポップアップ：モーダル本体 */
-    #case-delete-modal {
-        position: fixed;
-        top: 50%;
-        left: 50%;
+    #case-delete-modal{
+        position: fixed; top: 50%; left: 50%;
         display: block;
         transform: translate(-50%, -50%) scale(0.9);
-        opacity: 0;
-        pointer-events: none;
+        opacity: 0; pointer-events: none;
         z-index: 1001;
         text-align: left;
         background: #fff;
         border: none;
-        box-shadow: 1px 3px 3px 0 rgba(0, 0, 0, .2),
-                    1px 3px 15px 2px rgba(0, 0, 0, .2);
+        box-shadow: 1px 3px 3px 0 rgba(0, 0, 0, .2), 1px 3px 15px 2px rgba(0, 0, 0, .2);
         border-radius: .28571429rem;
         font-size: 1rem;
         padding: 1.2rem 1.3rem 1rem;
         box-sizing: border-box;
         transition: transform .22s ease-out, opacity .22s ease-out;
     }
-
-    #case-delete-modal.active {
+    #case-delete-modal.active{
         transform: translate(-50%, -50%) scale(1);
         opacity: 1;
         pointer-events: auto;
     }
+    .title_boader{ border-bottom: 3px solid #2185d0; padding-bottom: 6px; margin-bottom: 8px; }
 
-    .title_boader {
-        border-bottom: 3px solid #2185d0;
-        padding-bottom: 6px;
-        margin-bottom: 8px;
-    }
-
-    #case-delete-modal textarea#abolish-comment {
-        width: 100%;
-        min-height: 100px;
-        resize: vertical;
-    }
-
-    #case-delete-modal .abolish-note {
-        margin-top: 8px;
-        color: #dc2626;
-        font-size: 12px;
-    }
-
-    #case-delete-modal.actions,
-    #case-delete-modal .actions {
+    #case-delete-modal textarea#abolish-comment{ width: 100%; min-height: 100px; resize: vertical; }
+    #case-delete-modal .abolish-note{ margin-top: 8px; color: #dc2626; font-size: 12px; }
+    #case-delete-modal .actions{
         margin-top: 1rem;
         padding-top: .75rem;
         border-top: 1px solid rgba(34, 36, 38, .15);
         text-align: right;
     }
 
-    /* ▼ コメント送信先選択モーダル（中央に固定） */
-    #selection-dimmer {
+    /* ▼ コメント送信先選択モーダル */
+    #selection-dimmer{
         position: fixed;
         inset: 0;
         display: none;
@@ -486,22 +366,16 @@
         align-items: center;
         justify-content: center;
     }
-
-    #selectionmodal {
+    #selectionmodal{
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
         z-index: 1002;
     }
-
     @media only screen and (max-width: 767.98px) {
-        #selectionmodal.ui.tiny.modal {
-            width: 95%;
-            margin: 0;
-        }
+        #selectionmodal.ui.tiny.modal { width: 95%; margin: 0; }
     }
-
 </style>
 
 {{-- ▼ 上部ボタン --}}
@@ -510,23 +384,23 @@
         <button type="button"
                 class="cweb-submit-button cweb-btn-edit"
                 onclick="goEditPage()">
-            編集
+            {{ __('cweb.actions.edit') }}
         </button>
-                @if(($case->status ?? '') !== 'closed')
-        <button type="button"
-                class="cweb-submit-button cweb-btn-delete"
-                onclick="openDeleteModal()">
-            廃止
-        </button>
-              @endif
+
+        @if(($case->status ?? '') !== 'closed')
+            <button type="button"
+                    class="cweb-submit-button cweb-btn-delete"
+                    onclick="openDeleteModal()">
+                {{ __('cweb.actions.abolish') }}
+            </button>
+        @endif
     </div>
 
-<button type="button"
-        class="cweb-submit-button cweb-btn-folder"
-        onclick="copyFolderPath()">
-    フォルダ
-</button>
-
+    <button type="button"
+            class="cweb-submit-button cweb-btn-folder"
+            onclick="copyFolderPath()">
+        {{ __('cweb.actions.folder') }}
+    </button>
 </div>
 
 <div class="cweb-case-layout">
@@ -540,7 +414,7 @@
                 {{-- 営業窓口 --}}
                 <tr>
                     <td class="cweb-case-th">
-                        <span style="color:red;">＊</span>営業窓口
+                        <span style="color:red;">＊</span>{{ __('cweb.form.sales_contact') }}
                     </td>
                     <td class="cweb-case-td">
                         @if($salesEmployeeNumber)
@@ -554,16 +428,10 @@
                     </td>
                 </tr>
 
-                @php
-                    $sharedUsers = collect($case->sharedUsers ?? [])->filter(function($row) {
-                        return ($row->role ?? null) === 'shared';
-                    });
-                @endphp
-
                 {{-- 情報共有者 --}}
                 <tr>
                     <td class="cweb-case-th">
-                        情報共有者
+                        {{ __('cweb.form.shared_users') }}
                     </td>
                     <td class="cweb-case-td">
                         @if($sharedUsers->isEmpty())
@@ -577,7 +445,7 @@
                                         / {{ $user->name }}
                                     @endif
                                     @if(!$loop->last)
-                                        、
+                                        {{ $listSep }}
                                     @endif
                                 @endif
                             @endforeach
@@ -588,7 +456,7 @@
                 {{-- 費用負担先 --}}
                 <tr>
                     <td class="cweb-case-th">
-                        <span style="color:red;">＊</span>費用負担先
+                        <span style="color:red;">＊</span>{{ __('cweb.form.cost_owner') }}
                     </td>
                     <td class="cweb-case-td">
                         {{ $case->cost_responsible_code ?? '-' }}
@@ -598,7 +466,7 @@
                 {{-- 顧客名 --}}
                 <tr>
                     <td class="cweb-case-th">
-                        <span style="color:red;">＊</span>顧客名
+                        <span style="color:red;">＊</span>{{ __('cweb.form.customer') }}
                     </td>
                     <td class="cweb-case-td">
                         {{ $case->customer_name ?? '-' }}
@@ -608,7 +476,7 @@
                 {{-- カテゴリー --}}
                 <tr>
                     <td class="cweb-case-th">
-                        <span style="color:red;">＊</span>カテゴリー
+                        <span style="color:red;">＊</span>{{ __('cweb.form.category') }}
                     </td>
                     <td class="cweb-case-td">
                         {{ $categoryLabel }}
@@ -618,7 +486,7 @@
                 {{-- 対象製品 --}}
                 <tr>
                     <td class="cweb-case-th">
-                        <span style="color:red;">＊</span>対象製品
+                        <span style="color:red;">＊</span>{{ __('cweb.form.product') }}
                     </td>
                     <td class="cweb-case-td">
                         {{ $productLabel ?: '-' }}
@@ -627,22 +495,22 @@
 
                 {{-- PCN管理項目 --}}
                 <tr>
-                    <td class="cweb-case-th">PCN管理項目</td>
+                    <td class="cweb-case-th">{{ __('cweb.show.pcn_items') }}</td>
                     <td class="cweb-case-td">
                         @if($pcnItems->isNotEmpty())
                             <ul style="margin:0;padding-left:18px;">
                                 @foreach($pcnItems as $item)
                                     @php
                                         $catLabel = match($item->category ?? '') {
-                                            'spec'        => '仕様書内容',
-                                            'man'         => '人（Man）',
-                                            'machine'     => '機械（Machine）',
-                                            'material'    => '材料（Material）',
-                                            'method'      => '方法（Method）',
-                                            'measurement' => '測定（Measurement）',
-                                            'environment' => '環境（Environment）',
-                                            'other'       => 'その他',
-                                            default       => '未分類',
+                                            'spec'        => __('cweb.pcn.categories.spec'),
+                                            'man'         => __('cweb.pcn.categories.man'),
+                                            'machine'     => __('cweb.pcn.categories.machine'),
+                                            'material'    => __('cweb.pcn.categories.material'),
+                                            'method'      => __('cweb.pcn.categories.method'),
+                                            'measurement' => __('cweb.pcn.categories.measurement'),
+                                            'environment' => __('cweb.pcn.categories.environment'),
+                                            'other'       => __('cweb.pcn.categories.other'),
+                                            default       => __('cweb.pcn.categories.uncategorized'),
                                         };
                                     @endphp
                                     <li style="margin-bottom:2px;">
@@ -651,7 +519,7 @@
                                             ：{{ $item->title }}
                                         @endif
                                         @if(!is_null($item->months_before))
-                                            （{{ $item->months_before }}ヵ月前連絡）
+                                            （{{ $item->months_before }}{{ __('cweb.pcn.months_before_suffix') }}）
                                         @endif
                                     </li>
                                 @endforeach
@@ -662,20 +530,9 @@
                     </td>
                 </tr>
 
-                @php
-                    $otherEmpNumbers = $otherReqs->pluck('responsible_employee_number')
-                                                 ->filter()
-                                                 ->unique()
-                                                 ->values()
-                                                 ->all();
-                    $otherEmployees = $otherEmpNumbers
-                        ? \App\Models\User::whereIn('employee_number', $otherEmpNumbers)->get()->keyBy('employee_number')
-                        : collect();
-                @endphp
-
                 {{-- その他要求 --}}
                 <tr>
-                    <td class="cweb-case-th">その他要求</td>
+                    <td class="cweb-case-th">{{ __('cweb.show.other_requests') }}</td>
                     <td class="cweb-case-td">
                         @if($otherReqs->isNotEmpty())
                             @foreach($otherReqs as $req)
@@ -689,7 +546,7 @@
                                         {{ $req->content ?? '' }}
                                     </div>
                                     <div style="font-size:11px;color:var(--muted);">
-                                        対応者：
+                                        {{ __('cweb.show.responsible') }}：
                                         @if($empNo || $emp)
                                             {{ $empNo }}
                                             @if($emp)
@@ -709,19 +566,19 @@
 
                 {{-- Will --}}
                 <tr>
-                    <td class="cweb-case-th">Will</td>
+                    <td class="cweb-case-th">{{ __('cweb.show.will') }}</td>
                     <td class="cweb-case-td">
-                        登録費：
+                        {{ __('cweb.show.will_initial') }}：
                         {{ $willInitial !== null ? number_format($willInitial).' will' : '-' }}
                         &nbsp;&nbsp;
-                        月額：
+                        {{ __('cweb.show.will_monthly') }}：
                         {{ $willMonthly !== null ? number_format($willMonthly).' will' : '-' }}
                     </td>
                 </tr>
 
                 {{-- 月額管理費の分配 --}}
                 <tr>
-                    <td class="cweb-case-th">月額管理費の分配</td>
+                    <td class="cweb-case-th">{{ __('cweb.show.will_allocations') }}</td>
                     <td class="cweb-case-td">
                         @if($willAllocations->isNotEmpty())
                             @foreach($willAllocations as $alloc)
@@ -743,7 +600,7 @@
 
                 {{-- 関連Q-WEB --}}
                 <tr>
-                    <td class="cweb-case-th">関連Q-WEB</td>
+                    <td class="cweb-case-th">{{ __('cweb.show.related_qweb') }}</td>
                     <td class="cweb-case-td">
                         {{ $case->related_qweb ?? '-' }}
                     </td>
@@ -758,14 +615,15 @@
     <div class="cweb-comment-container ui cweb-case-right">
 
         {{-- コメント入力フォーム --}}
-        <form id="comment-form" method="POST" action="{{ route('cweb.cases.comments.store', $case) }}">
+        <form id="comment-form" method="POST" action="{{ route('cweb.cases.comments.store', ['locale' => $currentLocale, 'case' => $case->id]) }}">
             @csrf
             <div class="ui.input" style="width:100%;">
                 <textarea id="val_message"
                           rows="5"
                           name="body"
-                          placeholder="Add a comments...">{{ old('body') }}</textarea>
+                          placeholder="{{ __('cweb.comments.placeholder') }}">{{ old('body') }}</textarea>
             </div>
+
             @error('body')
                 <div style="color:#f97316;font-size:12px;margin-top:2px;">
                     {{ $message }}
@@ -777,24 +635,24 @@
                         class="ui blue button menu_btn"
                         name="wfbtnsendmsg"
                         id="wfbtnsendmsg">
-                    <i class="comment outline icon"></i>投稿
+                    <i class="comment outline icon"></i>{{ __('cweb.actions.post') }}
                 </button>
             </div>
 
-            {{-- ▼ 送信先選択モーダル（コメントフォーム内で OK） --}}
+            {{-- ▼ 送信先選択モーダル --}}
             <div id="selection-dimmer" class="ui dimmer" style="display:none;"></div>
 
             <div class="ui tiny modal transition front" id="selectionmodal" style="display:none;">
-                <div class="header title_boader">送信先を選択してください</div>
+                <div class="header title_boader">{{ __('cweb.comments.send_to_title') }}</div>
 
                 <div class="content" id="selection_content">
                     @forelse($mailRecipients as $empNo => $info)
                         <div class="ui checkbox" style="margin-bottom:5px">
                             <input type="checkbox"
-                                name="val_mailsend[]"
-                                id="val_mailsend_{{ $loop->index }}"
-                                value="{{ $empNo }}"
-                                {{ $info['checked'] ? 'checked' : '' }}>
+                                   name="val_mailsend[]"
+                                   id="val_mailsend_{{ $loop->index }}"
+                                   value="{{ $empNo }}"
+                                   {{ $info['checked'] ? 'checked' : '' }}>
                             <label for="val_mailsend_{{ $loop->index }}">
                                 {{ $empNo }}
                                 @if(!empty($info['name']))
@@ -803,57 +661,55 @@
                             </label>
                         </div>
                     @empty
-                        <p>送信先候補がありません。</p>
+                        <p>{{ __('cweb.comments.no_candidates') }}</p>
                     @endforelse
                 </div>
 
                 <div class="actions arcon_hf" style="text-align: center">
-                    <div class="ui button positive ok" id="selection-ok">OK</div>
-                    <div class="ui button cancel" id="selection-cancel">Cancel</div>
+                    <div class="ui button positive ok" id="selection-ok">{{ __('cweb.common.ok') }}</div>
+                    <div class="ui button cancel" id="selection-cancel">{{ __('cweb.common.cancel') }}</div>
                 </div>
             </div>
-        </form> {{-- ★ コメントフォームはここで閉じる（廃止フォームとは分離） --}}
+        </form>
 
         {{-- ▼ 廃止ポップアップ（コメントフォームの外側） --}}
-
-        {{-- オーバーレイ（黒半透明） --}}
         <div id="case-delete-overlay" class="ui dimmer" style="display:none;"></div>
 
-        {{-- モーダル本体 --}}
         <div id="case-delete-modal"
-            class="ui small modal front"
-            style="display:none; opacity:0; pointer-events:none;">
+             class="ui small modal front"
+             style="display:none; opacity:0; pointer-events:none;">
 
             <div class="header title_boader">
-                廃止にしますか？
+                {{ __('cweb.abolish.title') }}
             </div>
 
             <div class="content">
                 <textarea id="abolish-comment"
-                        placeholder="comments..."></textarea>
+                          placeholder="{{ __('cweb.abolish.placeholder') }}"></textarea>
 
                 <div class="abolish-note">
-                    担当営業の誰からいつ合意を得たかを記載してください
+                    {{ __('cweb.abolish.note') }}
                 </div>
             </div>
 
             <div class="actions" style="text-align:center;">
                 <div class="ui positive button" onclick="onAbolishOk()">
-                    OK
+                    {{ __('cweb.common.ok') }}
                 </div>
                 <div class="ui button" onclick="closeDeleteModal()">
-                    Cancel
+                    {{ __('cweb.common.cancel') }}
                 </div>
             </div>
         </div>
 
-        {{-- 廃止送信用フォーム（コメントフォームとは別フォーム） --}}
-        <form id="abolish-form"
-            method="POST"
-            action="{{ route('cweb.cases.abolish', $case) }}">
-            @csrf
-            <input type="hidden" name="abolish_comment" id="abolish-comment-hidden">
-        </form>
+{{-- 廃止送信用フォーム --}}
+<form id="abolish-form"
+      method="POST"
+      action="{{ route('cweb.cases.abolish', ['locale' => $currentLocale, 'case' => $case->id]) }}">
+    @csrf
+    <input type="hidden" name="abolish_comment" id="abolish-comment-hidden" value="">
+</form>
+
 
         {{-- コメント一覧 --}}
         <div class="cweb-comment-list">
@@ -867,7 +723,7 @@
                             <i class="user circle outline icon"></i>
                         </div>
                         <div class="cweb-comment-meta">
-                            {{ optional($comment->user)->name ?? '－' }}
+                            {{ optional($comment->user)->name ?? '-' }}
                             ／
                             {{ $comment->created_at?->format('Y/m/d H:i') ?? '' }}
                         </div>
@@ -881,7 +737,8 @@
 
 <script>
 function goEditPage() {
-    window.location.href = "{{ route('cweb.cases.edit', $case) }}";
+    window.location.href = "{{ route('cweb.cases.edit', ['locale' => $currentLocale, 'case' => $case->id]) }}";
+
 }
 
 /* ▼ 廃止モーダル関連 */
@@ -897,7 +754,6 @@ function openDeleteModal() {
     overlay.classList.add('visible', 'active');
 
     modal.style.display = 'block';
-
     modal.classList.add('visible', 'active');
     modal.style.opacity = '1';
     modal.style.pointerEvents = 'auto';
@@ -914,7 +770,6 @@ function closeDeleteModal() {
     modal.classList.remove('visible', 'active');
     modal.style.opacity = '0';
     modal.style.pointerEvents = 'none';
-
     modal.style.display = 'none';
 }
 
@@ -924,7 +779,7 @@ function onAbolishOk() {
 
     const comment = textarea.value.trim();
     if (!comment) {
-        alert('コメントを入力してください。');
+        alert(@json(__('cweb.abolish.alert_enter_comment')));
         return;
     }
 
@@ -936,16 +791,14 @@ function onAbolishOk() {
 
 /* ▼ コメント投稿時の送信先選択モーダル */
 document.addEventListener('DOMContentLoaded', function () {
-    const form        = document.getElementById('comment-form');
-    const openBtn     = document.getElementById('wfbtnsendmsg');
-    const selection   = document.getElementById('selectionmodal');
-    const dimmer      = document.getElementById('selection-dimmer');
-    const okBtn       = document.getElementById('selection-ok');
-    const cancelBtn   = document.getElementById('selection-cancel');
+    const form      = document.getElementById('comment-form');
+    const openBtn   = document.getElementById('wfbtnsendmsg');
+    const selection = document.getElementById('selectionmodal');
+    const dimmer    = document.getElementById('selection-dimmer');
+    const okBtn     = document.getElementById('selection-ok');
+    const cancelBtn = document.getElementById('selection-cancel');
 
-    if (!form || !openBtn || !selection || !dimmer || !okBtn || !cancelBtn) {
-        return;
-    }
+    if (!form || !openBtn || !selection || !dimmer || !okBtn || !cancelBtn) return;
 
     function openSelectionModal() {
         dimmer.style.display = 'flex';
@@ -978,28 +831,21 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     dimmer.addEventListener('click', function (e) {
-        if (e.target === dimmer) {
-            closeSelectionModal();
-        }
+        if (e.target === dimmer) closeSelectionModal();
     });
 });
 
+/* ▼ フォルダパスコピー（成功メッセージなし / 失敗時だけアラート） */
 function copyFolderPath() {
     const path = "\\\\ftktake01\\QWeb_Data\\Specification\\{{ $case->manage_no }}";
 
-    // Clipboard API（HTTPS / localhost向け）
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(path)
-            .then(() => {
-                // 成功時：何もしない
-            })
-            .catch(() => {
-                alert("フォルダが存在しません。");
-            });
+            .then(() => { /* 成功時：何もしない */ })
+            .catch(() => { alert(@json(__('cweb.clipboard.folder_not_found'))); });
         return;
     }
 
-    // フォールバック（http等でも動く可能性あり）
     fallbackCopy(path);
 }
 
@@ -1024,7 +870,7 @@ function fallbackCopy(text) {
     }
 
     if (!ok) {
-        alert("フォルダが存在しません。");
+        alert(@json(__('cweb.clipboard.folder_not_found')));
     }
 }
 </script>
