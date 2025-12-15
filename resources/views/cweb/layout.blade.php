@@ -336,17 +336,20 @@ textarea::placeholder {
     {{-- 🔹 本文 --}}
     <main class="cweb-main">
         @yield('content')
-            <div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
 
-    <div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
-        <div class="header">完了</div>
-        <div class="content" style="text-align:center; font-size:16px; padding:20px;">
-            登録しました
+        <div id="success-modal-overlay" class="ui dimmer" style="display:none;"></div>
+
+        <div id="success-modal" class="ui small modal" style="display:block; opacity:0; pointer-events:none;">
+            <div class="header">{{ __('cweb.modal.done_title') }}</div>
+            <div class="content" style="text-align:center; font-size:16px; padding:20px;">
+                {{ __('cweb.modal.saved') }}
+            </div>
+            <div class="actions" style="text-align:center;">
+                <button type="button" class="ui blue button" onclick="closeSuccessModal()">
+                    {{ __('cweb.common.ok') }}
+                </button>
+            </div>
         </div>
-        <div class="actions" style="text-align:center;">
-            <button type="button" class="ui blue button" onclick="closeSuccessModal()">OK</button>
-        </div>
-    </div>
 
     <!-- <script>
         function showSuccessModal() {
