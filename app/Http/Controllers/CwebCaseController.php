@@ -33,6 +33,11 @@ class CwebCaseController extends Controller
         $productGroup = (string)$request->query('product_group', '');
         $productCode  = (string)$request->query('product_code', '');
 
+// $isShared = \App\Models\CwebCaseSharedUser::where('case_id', $case->id)
+//     ->where('user_id', $user->id)
+//     ->exists();
+
+
         // ▼ tab=product はそのまま（あなたの既存ロジック）
         if ($tab === 'product') {
             $groupOptions = [
@@ -161,15 +166,56 @@ class CwebCaseController extends Controller
             ->leftJoin('users as sales', 'sales.employee_number', '=', 'cweb_cases.sales_contact_employee_number')
             ->select('cweb_cases.*', 'sales.name as sales_contact_employee_name');
 
-        if ($tab === 'mine') {
-            $userId = $user->id;
-            $empNo  = (string) $user->employee_number;
+if ($tab === 'mine') {
+    $userId    = $user->id;
+    $empNoRaw  = (string)($user->employee_number ?? '');
+    $empNoNorm = ltrim($empNoRaw, '0');
+    if ($empNoNorm === '') $empNoNorm = '0';
 
-            $query->where(function ($q) use ($userId, $empNo) {
-                $q->where('created_by_user_id', $userId);
-                if ($empNo !== '') $q->orWhere('sales_contact_employee_number', $empNo);
+    // ✅ 品証マスタ者は「全案件」
+    $isQualityMaster = CwebQualityMaster::query()
+        ->where('is_active', true)
+        ->whereRaw("ltrim(employee_number, '0') = ?", [$empNoNorm])
+        ->exists();
+
+    // 品証マスタ者でない場合だけ「関わる案件」絞り込み
+    if (!$isQualityMaster) {
+        $query->where(function ($q) use ($userId, $empNoNorm) {
+
+            // 1) 営業窓口者
+            $q->whereRaw("ltrim(cweb_cases.sales_contact_employee_number, '0') = ?", [$empNoNorm]);
+
+            // 2) 情報共有者（role=shared の user_id）
+            $q->orWhereExists(function ($sub) use ($userId) {
+                $sub->select(DB::raw(1))
+                    ->from('cweb_case_shared_users as csu')
+                    ->whereColumn('csu.case_id', 'cweb_cases.id')
+                    ->where('csu.role', 'shared')
+                    ->where('csu.user_id', $userId);
             });
-        }
+
+            // 3) その他要求対応者（社員番号一致）
+            $q->orWhereExists(function ($sub) use ($empNoNorm) {
+                $sub->select(DB::raw(1))
+                    ->from('cweb_case_other_requirements as cor')
+                    ->whereColumn('cor.case_id', 'cweb_cases.id')
+                    ->whereNotNull('cor.responsible_employee_number')
+                    ->whereRaw("ltrim(cor.responsible_employee_number, '0') = ?", [$empNoNorm]);
+            });
+
+            // 4) 当該製品の担当者（product_group + product_code 一致 & employee_number一致）
+            $q->orWhereExists(function ($sub) use ($empNoNorm) {
+                $sub->select(DB::raw(1))
+                    ->from('cweb_product_owners as po')
+                    ->where('po.is_active', true)
+                    ->whereColumn('po.product_group', 'cweb_cases.product_group')
+                    ->whereColumn('po.product_code',  'cweb_cases.product_code')
+                    ->whereNotNull('po.employee_number')
+                    ->whereRaw("ltrim(po.employee_number, '0') = ?", [$empNoNorm]);
+            });
+        });
+    }
+}
 
         if ($keyword !== '') {
             $kw = mb_strtolower($keyword, 'UTF-8');
@@ -483,81 +529,75 @@ class CwebCaseController extends Controller
     /**
      * 詳細
      */
-    public function show(Request $request, string $locale, CwebCase $case)
-    {
-        $case->load([
-            'sharedUsers.user',
-            'pcnItems',
-            'otherRequirements',
-            'willAllocations',
-            'comments.user',
-        ]);
+public function show(Request $request, string $locale, CwebCase $case)
+{
+    $case->load([
+        'sharedUsers.user',
+        'pcnItems',
+        'otherRequirements',
+        'willAllocations',
+        'comments.user',
+    ]);
 
-        $sharedUsers = $case->sharedUsers
-            ->where('role', 'shared')
-            ->filter(fn($row) => $row->user)
-            ->unique('user_id')
-            ->values();
+    $sharedUsers = $case->sharedUsers
+        ->where('role', 'shared')
+        ->filter(fn($row) => $row->user)
+        ->unique('user_id')
+        ->values();
 
-        $categories = [];
-        if ($case->category_standard) $categories[] = '標準管理';
-        if ($case->category_pcn)      $categories[] = 'PCN';
-        if ($case->category_other)    $categories[] = 'その他要求';
-        $categoryLabel = $categories ? implode(' / ', $categories) : '-';
+    $categories = [];
+    if ($case->category_standard) $categories[] = '標準管理';
+    if ($case->category_pcn)      $categories[] = 'PCN';
+    if ($case->category_other)    $categories[] = 'その他要求';
+    $categoryLabel = $categories ? implode(' / ', $categories) : '-';
 
-        $statusLabel = match ($case->status ?? '') {
-            'active' => 'アクティブ',
-            'closed' => '廃止',
-            default  => '不明',
-        };
+    $statusLabel = match ($case->status ?? '') {
+        'active' => 'アクティブ',
+        'closed' => '廃止',
+        default  => '不明',
+    };
 
-        $productLabel = trim(($case->product_group ?? '') . ' ' . ($case->product_code ?? ''));
+    $productLabel = trim(($case->product_group ?? '') . ' ' . ($case->product_code ?? ''));
 
-        $salesEmployeeNumber = $case->sales_contact_employee_number;
-        $salesEmployeeName   = null;
-        if (!empty($salesEmployeeNumber)) {
-            $salesUser = User::where('employee_number', $salesEmployeeNumber)->first();
-            $salesEmployeeName = optional($salesUser)->name;
-        }
-
-        $otherNumbers = $case->otherRequirements
-            ? $case->otherRequirements->pluck('responsible_employee_number')->filter()->unique()->values()
-            : collect();
-
-        $otherEmployees = $otherNumbers->isNotEmpty()
-            ? User::whereIn('employee_number', $otherNumbers)->get()->keyBy('employee_number')
-            : collect();
-
-        // ✅ コメント投稿：品証マスタ + 営業窓口 + 情報共有者 + その他要求対応者 + 当該製品の担当者（候補を出して選択）
-        $candidateEmpNos = $this->getCaseRecipientEmpNos($case);
-
-        $candidateUsers = !empty($candidateEmpNos)
-            ? User::whereIn('employee_number', $candidateEmpNos)->get()->keyBy('employee_number')
-            : collect();
-
-        $mailRecipients = [];
-        foreach ($candidateEmpNos as $empNo) {
-            $u = $candidateUsers[$empNo] ?? null;
-            $mailRecipients[$empNo] = [
-                'employee_number' => $empNo,
-                'name'            => $u->name ?? '',
-                'checked'         => true, // デフォルトON
-            ];
-        }
-
-        return view('cweb.cases.show', [
-            'locale'              => $locale,
-            'case'                => $case,
-            'categoryLabel'       => $categoryLabel,
-            'statusLabel'         => $statusLabel,
-            'productLabel'        => $productLabel ?: '-',
-            'salesEmployeeNumber' => $salesEmployeeNumber,
-            'salesEmployeeName'   => $salesEmployeeName,
-            'otherEmployees'      => $otherEmployees,
-            'sharedUsers'         => $sharedUsers,
-            'mailRecipients'      => $mailRecipients,
-        ]);
+    $salesEmployeeNumber = $case->sales_contact_employee_number;
+    $salesEmployeeName   = null;
+    if (!empty($salesEmployeeNumber)) {
+        $salesUser = User::where('employee_number', $salesEmployeeNumber)->first();
+        $salesEmployeeName = optional($salesUser)->name;
     }
+
+    $otherNumbers = $case->otherRequirements
+        ? $case->otherRequirements->pluck('responsible_employee_number')->filter()->unique()->values()
+        : collect();
+
+    $otherEmployees = $otherNumbers->isNotEmpty()
+        ? User::whereIn('employee_number', $otherNumbers)->get()->keyBy('employee_number')
+        : collect();
+
+    // ✅ 1回表示したら消す（コメント投稿で再表示されない）
+    $openMailRegistration = session()->pull('open_mail_registration', false);
+
+    // ✅ コメント送信先（品証なし＆デフォルトONルール適用＆0埋め吸収）
+    [$mailRecipients, $empToEmail, $defaultCheckedEmails] = $this->buildCommentMailRecipients($case);
+
+    return view('cweb.cases.show', [
+        'locale'              => $locale,
+        'case'                => $case,
+        'categoryLabel'       => $categoryLabel,
+        'statusLabel'         => $statusLabel,
+        'productLabel'        => $productLabel ?: '-',
+        'salesEmployeeNumber' => $salesEmployeeNumber,
+        'salesEmployeeName'   => $salesEmployeeName,
+        'otherEmployees'      => $otherEmployees,
+        'sharedUsers'         => $sharedUsers,
+
+        // ★ここがBladeの表示＆JSの根拠になる
+        'mailRecipients'      => $mailRecipients,
+        'empToEmail'          => $empToEmail,
+        'defaultCheckedEmails'=> $defaultCheckedEmails,
+        'openMailRegistration'=> $openMailRegistration,
+    ]);
+}
 
     /**
      * 編集画面
@@ -756,6 +796,132 @@ class CwebCaseController extends Controller
             'tab'    => 'product',
         ]);
     }
+
+private function buildCommentMailRecipients(CwebCase $case): array
+{
+    // 正規化（先頭0除去）
+    $norm = function ($v) {
+        $s = trim((string)$v);
+        $s = ltrim($s, '0');
+        return $s === '' ? '0' : $s;
+    };
+
+    // 候補（品証なし）
+    $creatorEmpNo = null;
+    if (!empty($case->created_by_user_id)) {
+        $creatorEmpNo = optional(User::find($case->created_by_user_id))->employee_number;
+    }
+
+    $salesEmpNo = $case->sales_contact_employee_number ?? null;
+
+    $sharedEmpNos = collect($case->sharedUsers ?? [])
+        ->filter(fn($row) => ($row->role ?? null) === 'shared')
+        ->map(fn($row) => optional($row->user)->employee_number)
+        ->filter()
+        ->values()
+        ->all();
+
+    $otherEmpNos = collect($case->otherRequirements ?? [])
+        ->pluck('responsible_employee_number')
+        ->filter()
+        ->values()
+        ->all();
+
+    $productEmpNos = [];
+    if (!empty($case->product_group) && !empty($case->product_code)) {
+        $productEmpNos = CwebProductOwner::query()
+            ->where('is_active', true)
+            ->where('product_group', $case->product_group)
+            ->where('product_code',  $case->product_code)
+            ->pluck('employee_number')
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    // raw候補
+    $rawEmpNos = collect([$creatorEmpNo, $salesEmpNo])
+        ->merge($sharedEmpNos)
+        ->merge($otherEmpNos)
+        ->merge($productEmpNos)
+        ->filter()
+        ->map(fn($v) => trim((string)$v))
+        ->filter(fn($v) => $v !== '')
+        ->unique()
+        ->values()
+        ->all();
+
+    // 正規化候補で users を引く（0埋め違い吸収）
+    $normEmpNos = collect($rawEmpNos)->map($norm)->unique()->values()->all();
+
+    $users = User::query()
+        ->select([
+            'employee_number',
+            'name',
+            'email',
+            DB::raw("ltrim(employee_number::text, '0') as emp_no_norm"),
+        ])
+        ->whereIn(DB::raw("ltrim(employee_number::text, '0')"), $normEmpNos)
+        ->get();
+
+    $byNorm = $users->keyBy('emp_no_norm');
+
+    $findUserByEmp = function ($empNo) use ($byNorm, $norm) {
+        $n = $norm($empNo);
+        return $byNorm[$n] ?? null;
+    };
+
+    // recipients：連想配列禁止（キー崩壊するので）→ リストで返す
+    $recipients = [];
+    $seen = []; // keyは prefix 付きで数値化を防ぐ
+
+    $push = function ($empNo, bool $checked) use (&$recipients, &$seen, $findUserByEmp, $norm) {
+        $empNo = trim((string)$empNo);
+        if ($empNo === '') return;
+
+        $nKey = 'n' . $norm($empNo); // 例: n123（数値化防止）
+        $u = $findUserByEmp($empNo);
+
+        $dispEmpNo = $u->employee_number ?? $empNo;
+
+        if (!isset($seen[$nKey])) {
+            $seen[$nKey] = count($recipients);
+            $recipients[] = [
+                'employee_number' => (string)$dispEmpNo,
+                'name'            => (string)($u->name ?? ''),
+                'checked'         => $checked,
+            ];
+        } else {
+            if ($checked) {
+                $recipients[$seen[$nKey]]['checked'] = true;
+            }
+        }
+    };
+
+    // ルール：登録者OFF、他ON
+    if ($creatorEmpNo) $push($creatorEmpNo, false);
+    if ($salesEmpNo)   $push($salesEmpNo, true);
+    foreach ($sharedEmpNos as $e)  $push($e, true);
+    foreach ($otherEmpNos as $e)   $push($e, true);
+    foreach ($productEmpNos as $e) $push($e, true);
+
+    // empToEmail：キーに prefix を付けて数値化を防ぐ（JSも同じprefixで引く）
+    $empToEmail = [];
+    foreach ($recipients as $r) {
+        $u = $findUserByEmp($r['employee_number']);
+        $empToEmail['e'.$r['employee_number']] = $u->email ?? null;
+    }
+
+    $defaultCheckedEmails = collect($recipients)
+        ->filter(fn($r) => !empty($r['checked']))
+        ->map(fn($r) => $empToEmail['e'.$r['employee_number']] ?? null)
+        ->filter()
+        ->values()
+        ->all();
+
+    return [$recipients, $empToEmail, $defaultCheckedEmails];
+}
+
 
     private function getCaseRecipientEmpNos(CwebCase $case): array
     {

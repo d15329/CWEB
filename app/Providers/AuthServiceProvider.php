@@ -12,9 +12,10 @@ class AuthServiceProvider extends ServiceProvider
      *
      * @var array<class-string, class-string>
      */
-    protected $policies = [
-        // 'App\Models\Model' => 'App\Policies\ModelPolicy',
-    ];
+protected $policies = [
+    \App\Models\CwebCase::class => \App\Policies\CwebCasePolicy::class,
+];
+
 
     /**
      * Register any authentication / authorization services.

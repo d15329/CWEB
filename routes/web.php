@@ -45,10 +45,16 @@ Route::group([
         Route::get('/', [CwebCaseController::class, 'index'])->name('cases.index');
         Route::get('/cases', [CwebCaseController::class, 'index']);
 
-        Route::get('/cases/create', [CwebCaseController::class, 'create'])->name('cases.create');
+        Route::get('/cases/create', [CwebCaseController::class, 'create'])
+    ->name('cases.create')
+    ->middleware('can:create,' . \App\Models\CwebCase::class);
+
         Route::post('/cases', [CwebCaseController::class, 'store'])->name('cases.store');
 
-        Route::get('/cases/{case}', [CwebCaseController::class, 'show'])->name('cases.show');
+        Route::get('/cases/{case}', [CwebCaseController::class, 'show'])
+    ->name('cases.show')
+    ->middleware('can:view,case');
+
         Route::get('/cases/{case}/edit', [CwebCaseController::class, 'edit'])->name('cases.edit');
         Route::put('/cases/{case}', [CwebCaseController::class, 'update'])->name('cases.update');
 

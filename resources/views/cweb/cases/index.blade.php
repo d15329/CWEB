@@ -2,6 +2,7 @@
 
 {{-- 🔹 ヘッダーは header セクションに --}}
 @section('header')
+
 @php
     $currentLocale = app()->getLocale();
     $nextLocale = $currentLocale === 'ja' ? 'en' : 'ja';
@@ -24,10 +25,11 @@
     <div class="cweb-header-inner">
         <div class="cweb-header-left">
             <a href="{{ route('cweb.cases.index') }}" class="cweb-brand-link">C-WEB</a>
-
-            <a href="{{ route('cweb.cases.create') }}" class="btn btn-accent">
-                {{ __('cweb.actions.register') }}
-            </a>
+@can('create', \App\Models\CwebCase::class)
+    <a href="{{ route('cweb.cases.create') }}" class="btn btn-accent">
+        {{ __('cweb.actions.register') }}
+    </a>
+@endcan
         </div>
 
         <div class="cweb-header-right">
@@ -375,12 +377,15 @@ document.addEventListener('DOMContentLoaded', function () {
             @endphp
 
             <tr>
-                <td style="padding:6px 10px;color:#2563eb;font-weight:700;text-align:center;">
-                    <a href="{{ route('cweb.cases.show', ['case' => $case->id]) }}"
-                       style="color:#2563eb;text-decoration:none;">
-                        {{ $case->manage_no }}
-                    </a>
-                </td>
+<td style="padding:6px 10px;color:#2563eb;font-weight:700;text-align:center;">
+  @can('view', $case)
+    <a href="{{ route('cweb.cases.show', ['case' => $case->id]) }}" style="color:#2563eb;text-decoration:none;">
+      {{ $case->manage_no }}
+    </a>
+  @else
+    <span style="color:#6b7280;">{{ $case->manage_no }}</span>
+  @endcan
+</td>
 
                 <td style="padding:6px 10px;color:#111827;text-align:center;">
                     {{ $statusLabel }}
