@@ -2,6 +2,8 @@
 
 @php
     use App\Models\User;
+        use App\Models\CwebQualityMaster;
+    use App\Models\CwebProductOwner;
 
     // ===== Locale =====
     $currentLocale = app()->getLocale();
@@ -22,10 +24,9 @@
     <div class="cweb-header-inner">
 
         <div class="cweb-header-left">
-<a href="{{ route('cweb.cases.index', ['locale' => $currentLocale]) }}" class="cweb-brand-link">
-    C-WEB
-</a>
-
+            <a href="{{ route('cweb.cases.index', ['locale' => $currentLocale]) }}" class="cweb-brand-link">
+                C-WEB
+            </a>
 
             {{-- 管理番号 + ステータス --}}
             <div style="font-weight:700;margin-left:12px;">
@@ -42,8 +43,7 @@
             {{-- ✅ 言語トグル：/ja ⇔ /en --}}
             <div class="cweb-header-lang">
                 <a class="cweb-header-lang-toggle"
-                   href="{{ route('cweb.cases.show', ['locale' => $nextLocale, 'case' => $case->id]) }}"
->
+                   href="{{ route('cweb.cases.show', ['locale' => $nextLocale, 'case' => $case->id]) }}">
                     {{ $currentLocale === 'ja' ? 'EN' : '日本語' }}
                 </a>
             </div>
@@ -107,56 +107,32 @@
        ========================= */
 
     // ▼ 製品別担当者マスタ（employee_number 配列）
-    $productOwnersMap = [
-        'HogoMax-内製品' => [
-            '102' => ['03867','07335'],
-            '103' => ['03867','07335'],
-            '104' => ['03867','07335'],
-            '105' => ['03867','07335'],
-            '106' => ['03867','07335'],
-            '107' => ['03867','07335'],
-            '108' => ['03867','07335'],
-            '152' => ['03867','07335'],
-            '153' => ['03867','07335'],
-            '201' => ['03867','07335'],
-            '202' => ['03867','07335'],
-            '203' => ['03867','07335'],
-            '204' => ['03867','07335'],
-        ],
-        'HogoMax-OEM品' => [
-            '002' => ['03867'],
-            '003' => ['03867'],
-        ],
-        'StayClean-内製品' => [
-            '301' => ['10660','07335'],
-            '401' => ['10660','07335'],
-        ],
-        'StayClean-OEM品' => [
-            '-A' => ['03048'],
-            '-F' => ['12588','01474'],
-            '-R' => ['12588','01474'],
-        ],
-        'ResiFlat-内製品' => [
-            '103' => ['03074','03112'],
-        ],
-        'ResiFlat-OEM品' => [
-            '002' => ['03074','03112'],
-        ],
-    ];
+$productOwners = [];
+$pg = $case->product_group ?? null;
+$pc = $case->product_code ?? null;
 
-    $productOwners = [];
+if ($pg && $pc) {
+    $productOwners = CwebProductOwner::query()
+        ->where('is_active', true)
+        ->where('product_group', $pg)
+        ->where('product_code', $pc)
+        ->pluck('employee_number')
+        ->unique()
+        ->values()
+        ->all();
+}    $productOwners = [];
     $pg = $case->product_group ?? null;
     $pc = $case->product_code ?? null;
     if ($pg && $pc && isset($productOwnersMap[$pg][$pc])) {
         $productOwners = $productOwnersMap[$pg][$pc];
     }
 
-    // ▼ 登録者（created_by は users.id 想定）
-    $creatorUser = null;
-    if (!empty($case->created_by)) {
-        $creatorUser = User::find($case->created_by);
+    // ▼ 登録者（created_by_user_id 想定：このBladeでは mail本文は auth()->user()->name を使うので必須ではない）
+    $creatorEmpNo = null;
+    if (!empty($case->created_by_user_id)) {
+        $creatorUser = User::find($case->created_by_user_id);
+        $creatorEmpNo = $creatorUser->employee_number ?? null;
     }
-    $creatorEmpNo = $creatorUser->employee_number ?? null;
 
     // ▼ 情報共有者社員番号
     $sharedEmpNos = $sharedUsers->map(function($row){
@@ -169,6 +145,12 @@
     // ▼ 営業窓口の社員番号
     $salesEmpNo = $salesEmployeeNumber;
 
+    // ▼ 品証マスタ（固定）※ここは実運用の社員番号に置き換え
+$qualityMasterEmpNos = CwebQualityMaster::query()
+    ->where('is_active', true)
+    ->pluck('employee_number')
+    ->toArray();
+
     // ▼ メール送信候補社員番号を集約
     $candidateEmpNos = collect([
             $creatorEmpNo,
@@ -177,6 +159,7 @@
         ->merge($sharedEmpNos)
         ->merge($otherReqEmpNos)
         ->merge($productOwners)
+        ->merge($qualityMasterEmpNos) // ★追加
         ->filter()
         ->unique()
         ->values()
@@ -210,6 +193,28 @@
     foreach ($sharedEmpNos as $empNo)    $addRecipient($empNo, true); // 情報共有者：ON
     foreach ($otherReqEmpNos as $empNo)  $addRecipient($empNo, true); // その他要求：ON
     foreach ($productOwners as $empNo)   $addRecipient($empNo, true); // 製品担当：ON
+    foreach ($qualityMasterEmpNos as $empNo) $addRecipient($empNo, true); // ★品証マスタ：ON
+
+    // ▼ 社員番号 => email（mailto用）
+    $empToEmail = $candidateUsers->map(fn($u) => $u->email ?? null)->toArray();
+
+    // ▼ show URL（Registrationで使用）
+    $caseUrl = route('cweb.cases.show', ['locale' => $currentLocale, 'case' => $case->id]);
+
+    // ▼ チェックONの送信先（Registration / Abolition の宛先に使う）
+    $defaultCheckedEmpNos = collect($mailRecipients)
+        ->filter(fn($r) => !empty($r['checked']))
+        ->keys()
+        ->values()
+        ->all();
+
+    $defaultCheckedEmails = collect($defaultCheckedEmpNos)
+        ->map(fn($empNo) => $empToEmail[$empNo] ?? null)
+        ->filter()
+        ->values()
+        ->all();
+
+    $openMailRegistration = (bool)session('open_mail_registration', false);
 @endphp
 
 <style>
@@ -376,6 +381,68 @@
     @media only screen and (max-width: 767.98px) {
         #selectionmodal.ui.tiny.modal { width: 95%; margin: 0; }
     }
+
+    /* ▼ 登録メール起動モーダル（追加） */
+    #regmail-dimmer{
+        position: fixed;
+        inset: 0;
+        display: none;
+        background: rgba(0,0,0,.6);
+        z-index: 1100;
+        align-items: center;
+        justify-content: center;
+    }
+    #regmail-modal{
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1101;
+        display:none;
+        background:#fff;
+        border-radius:.28571429rem;
+        box-shadow: 1px 3px 15px 2px rgba(0, 0, 0, .2);
+        padding: 1.1rem 1.2rem 1rem;
+        width: 520px;
+        max-width: 95%;
+    }
+    #regmail-modal .actions{
+        margin-top: 12px;
+        text-align:center;
+        display:flex;
+        gap:10px;
+        justify-content:center;
+    }
+
+    /* ▼ メール起動完了モーダル（登録/廃止 共通） */
+#mailinfo-dimmer{
+    position: fixed;
+    inset: 0;
+    display: none;
+    background: rgba(0,0,0,.6);
+    z-index: 1200;
+    align-items: center;
+    justify-content: center;
+}
+#mailinfo-modal{
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1201;
+    display:none;
+    background:#fff;
+    border-radius:.28571429rem;
+    box-shadow: 1px 3px 15px 2px rgba(0, 0, 0, .2);
+    padding: 1.1rem 1.2rem 1rem;
+    width: 520px;
+    max-width: 95%;
+}
+#mailinfo-modal .actions{
+    margin-top: 12px;
+    text-align:center;
+}
+
 </style>
 
 {{-- ▼ 上部ボタン --}}
@@ -702,14 +769,13 @@
             </div>
         </div>
 
-{{-- 廃止送信用フォーム --}}
-<form id="abolish-form"
-      method="POST"
-      action="{{ route('cweb.cases.abolish', ['locale' => $currentLocale, 'case' => $case->id]) }}">
-    @csrf
-    <input type="hidden" name="abolish_comment" id="abolish-comment-hidden" value="">
-</form>
-
+        {{-- 廃止送信用フォーム --}}
+        <form id="abolish-form"
+              method="POST"
+              action="{{ route('cweb.cases.abolish', ['locale' => $currentLocale, 'case' => $case->id]) }}">
+            @csrf
+            <input type="hidden" name="abolish_comment" id="abolish-comment-hidden" value="">
+        </form>
 
         {{-- コメント一覧 --}}
         <div class="cweb-comment-list">
@@ -735,11 +801,77 @@
     </div>{{-- .cweb-case-right --}}
 </div>{{-- .cweb-case-layout --}}
 
+{{-- ▼ 登録後の「メール作成」モーダル（追加） --}}
+<div id="regmail-dimmer"></div>
+<div id="regmail-modal">
+    <div class="header title_boader" style="font-weight:800;">
+        Registration_顧客要求の新規登録がありました / C-WEB /({{ $case->manage_no }})
+    </div>
+    <div class="content" style="font-size:13px;">
+        登録メールを作成します。<br>
+        （宛先：品証マスタ / 営業窓口 / 情報共有者 / その他要求対応者 / 製品担当）
+    </div>
+    <div class="actions">
+        <button type="button" class="ui positive button" id="regmail-ok">メール作成</button>
+        <button type="button" class="ui button" id="regmail-cancel">閉じる</button>
+    </div>
+</div>
+
 <script>
 function goEditPage() {
     window.location.href = "{{ route('cweb.cases.edit', ['locale' => $currentLocale, 'case' => $case->id]) }}";
-
 }
+
+/* ========= mailto起動 ========= */
+function openMailClient(toEmails, subject, body) {
+    const unique = [...new Set((toEmails || []).filter(Boolean))];
+    if (unique.length === 0) {
+        alert('送信先のメールアドレスが取得できませんでした（users.email を確認してください）');
+        return false;
+    }
+    const to = unique.join(',');
+    const url = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body ?? '')}`;
+
+    // mailto は window.open がブロックされることがあるので location も用意
+    const w = window.open(url, '_blank');
+    if (!w) window.location.href = url;
+
+    return true;
+}
+
+/* ========= メール起動完了ポップアップ（グローバルで使えるようにする） ========= */
+let mailInfoAfterClose = null;
+
+function openMailInfoModal(afterCloseFn) {
+    const dimmer = document.getElementById('mailinfo-dimmer');
+    const modal  = document.getElementById('mailinfo-modal');
+
+    mailInfoAfterClose = (typeof afterCloseFn === 'function') ? afterCloseFn : null;
+
+    if (!dimmer || !modal) return;
+
+    dimmer.style.display = 'flex';
+    modal.style.display  = 'block';
+}
+
+function closeMailInfoModal() {
+    const dimmer = document.getElementById('mailinfo-dimmer');
+    const modal  = document.getElementById('mailinfo-modal');
+
+    if (dimmer) dimmer.style.display = 'none';
+    if (modal)  modal.style.display  = 'none';
+
+    const fn = mailInfoAfterClose;
+    mailInfoAfterClose = null;
+    if (fn) fn();
+}
+
+const EMP_TO_EMAIL = @json($empToEmail);
+const CASE_MANAGE_NO = @json($case->manage_no);
+const CURRENT_USER_NAME = @json(auth()->user()->name ?? '');
+const CASE_URL = @json($caseUrl);
+const DEFAULT_TO_EMAILS = @json($defaultCheckedEmails);
+const OPEN_MAIL_REGISTRATION = @json($openMailRegistration);
 
 /* ▼ 廃止モーダル関連 */
 function openDeleteModal() {
@@ -783,14 +915,38 @@ function onAbolishOk() {
         return;
     }
 
-    document.getElementById('abolish-comment-hidden').value = comment;
+    const subject = `Abolition_顧客要求が廃止されました / C-WEB /(${CASE_MANAGE_NO})`;
+    const body = `廃止されました：${CURRENT_USER_NAME}\nコメント:${comment}`;
 
+    const opened = openMailClient(DEFAULT_TO_EMAILS, subject, body);
+
+    document.getElementById('abolish-comment-hidden').value = comment;
     closeDeleteModal();
-    document.getElementById('abolish-form').submit();
+
+    // 廃止は画面遷移するので、OK後に submit
+    if (opened) {
+        openMailInfoModal(() => {
+            document.getElementById('abolish-form').submit();
+        });
+    } else {
+        document.getElementById('abolish-form').submit();
+    }
 }
 
-/* ▼ コメント投稿時の送信先選択モーダル */
+/* ▼ 初期化 */
 document.addEventListener('DOMContentLoaded', function () {
+
+    // mailinfo OK/外側クリック
+    const mailOk = document.getElementById('mailinfo-ok');
+    const mailDimmer = document.getElementById('mailinfo-dimmer');
+    if (mailOk) mailOk.addEventListener('click', closeMailInfoModal);
+    if (mailDimmer) {
+        mailDimmer.addEventListener('click', function(e){
+            if (e.target === mailDimmer) closeMailInfoModal();
+        });
+    }
+
+    // コメント送信先選択モーダル
     const form      = document.getElementById('comment-form');
     const openBtn   = document.getElementById('wfbtnsendmsg');
     const selection = document.getElementById('selectionmodal');
@@ -798,41 +954,85 @@ document.addEventListener('DOMContentLoaded', function () {
     const okBtn     = document.getElementById('selection-ok');
     const cancelBtn = document.getElementById('selection-cancel');
 
-    if (!form || !openBtn || !selection || !dimmer || !okBtn || !cancelBtn) return;
-
     function openSelectionModal() {
         dimmer.style.display = 'flex';
         dimmer.classList.add('visible', 'active');
-
         selection.style.display = 'block';
         selection.classList.add('visible', 'active');
     }
-
     function closeSelectionModal() {
         dimmer.classList.remove('visible', 'active');
         dimmer.style.display = 'none';
-
         selection.classList.remove('visible', 'active');
         selection.style.display = 'none';
     }
 
-    openBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        openSelectionModal();
-    });
+    if (form && openBtn && selection && dimmer && okBtn && cancelBtn) {
+        openBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            openSelectionModal();
+        });
 
-    okBtn.addEventListener('click', function () {
-        closeSelectionModal();
-        form.submit();
-    });
+        okBtn.addEventListener('click', function () {
+            const checkedEmpNos = Array.from(document.querySelectorAll('input[name="val_mailsend[]"]:checked'))
+                .map(el => el.value);
 
-    cancelBtn.addEventListener('click', function () {
-        closeSelectionModal();
-    });
+            const toEmails = checkedEmpNos
+                .map(empNo => EMP_TO_EMAIL[empNo])
+                .filter(Boolean);
 
-    dimmer.addEventListener('click', function (e) {
-        if (e.target === dimmer) closeSelectionModal();
-    });
+            const comment = (document.getElementById('val_message')?.value || '').trim();
+            const subject = `New Comment コメントが投稿されました / C-WEB /(${CASE_MANAGE_NO})`;
+            const body = `${comment}`;
+
+            openMailClient(toEmails, subject, body);
+
+            closeSelectionModal();
+            form.submit();
+        });
+
+        cancelBtn.addEventListener('click', closeSelectionModal);
+        dimmer.addEventListener('click', function (e) {
+            if (e.target === dimmer) closeSelectionModal();
+        });
+    }
+
+    // 登録直後モーダル
+    const regDimmer = document.getElementById('regmail-dimmer');
+    const regModal  = document.getElementById('regmail-modal');
+    const regOk     = document.getElementById('regmail-ok');
+    const regCancel = document.getElementById('regmail-cancel');
+
+    function openRegMailModal() {
+        if (!regDimmer || !regModal) return;
+        regDimmer.style.display = 'flex';
+        regModal.style.display  = 'block';
+    }
+    function closeRegMailModal() {
+        if (!regDimmer || !regModal) return;
+        regDimmer.style.display = 'none';
+        regModal.style.display  = 'none';
+    }
+
+    if (OPEN_MAIL_REGISTRATION) openRegMailModal();
+
+    if (regOk) {
+        regOk.addEventListener('click', function () {
+            const subject = `Registration_顧客要求の新規登録がありました / C-WEB /(${CASE_MANAGE_NO})`;
+            const body = `${CASE_URL}\n\n新規登録しました：${CURRENT_USER_NAME}`;
+
+            const opened = openMailClient(DEFAULT_TO_EMAILS, subject, body);
+            closeRegMailModal();
+
+            if (opened) openMailInfoModal();
+        });
+    }
+    if (regCancel) regCancel.addEventListener('click', closeRegMailModal);
+    if (regDimmer) {
+        regDimmer.addEventListener('click', function (e) {
+            if (e.target === regDimmer) closeRegMailModal();
+        });
+    }
 });
 
 /* ▼ フォルダパスコピー（成功メッセージなし / 失敗時だけアラート） */
@@ -846,12 +1046,8 @@ function copyFolderPath() {
         return;
     }
 
-    fallbackCopy(path);
-}
-
-function fallbackCopy(text) {
     const ta = document.createElement('textarea');
-    ta.value = text;
+    ta.value = path;
     ta.setAttribute('readonly', '');
     ta.style.position = 'fixed';
     ta.style.left = '-9999px';
@@ -861,18 +1057,29 @@ function fallbackCopy(text) {
     ta.setSelectionRange(0, ta.value.length);
 
     let ok = false;
-    try {
-        ok = document.execCommand('copy');
-    } catch (e) {
-        ok = false;
-    } finally {
-        document.body.removeChild(ta);
-    }
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
 
-    if (!ok) {
-        alert(@json(__('cweb.clipboard.folder_not_found')));
-    }
+    if (!ok) alert(@json(__('cweb.clipboard.folder_not_found')));
 }
 </script>
+
+{{-- ▼ メール起動完了ポップアップ（登録/廃止 共通） --}}
+<div id="mailinfo-dimmer"></div>
+<div id="mailinfo-modal">
+    <div class="header title_boader" style="font-weight:800;">
+        {{ $currentLocale === 'ja' ? '確認' : 'Notice' }}
+    </div>
+    <div class="content" style="font-size:13px; line-height:1.6;">
+        {{ $currentLocale === 'ja'
+            ? 'メールを立ち上げました。関係者に送信してください。'
+            : 'Mail composer opened. Please send it to the related members.' }}
+    </div>
+    <div class="actions">
+        <button type="button" class="ui positive button" id="mailinfo-ok">
+            {{ $currentLocale === 'ja' ? 'OK' : 'OK' }}
+        </button>
+    </div>
+</div>
 
 @endsection

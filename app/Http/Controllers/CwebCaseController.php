@@ -11,6 +11,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Models\CwebQualityMaster;
+use App\Models\CwebProductOwner;
 
 class CwebCaseController extends Controller
 {
@@ -51,20 +53,41 @@ class CwebCaseController extends Controller
             ];
 
             $pcnCategoryDefs = [
-                '仕様書内容' => ['spec', '仕様書内容'],
-                '人員変更'   => ['man', '人員変更'],
-                '設備変更'   => ['machine', '設備変更'],
-                '手順変更'   => ['method', '手順変更'],
-                '材料変更'   => ['material', '材料変更'],
-                '測定変更'   => ['measurement', '測定変更'],
-                '環境変更'   => ['environment', '環境変更'],
-                'その他変更' => ['other', 'other_change', 'その他変更'],
+                // ✅ キーを canonical（辞書キー）にする
+                'spec' => [
+                    'candidates' => ['spec', '仕様書内容'],
+                ],
+                'man' => [
+                    'candidates' => ['man', '人', '人員変更'],
+                ],
+                'machine' => [
+                    'candidates' => ['machine', '機械', '設備変更'],
+                ],
+                'material' => [
+                    'candidates' => ['material', '材料', '材料変更'],
+                ],
+                'method' => [
+                    'candidates' => ['method', '方法', '手順変更'],
+                ],
+                'measurement' => [
+                    // ※ typo 吸収も入れとく（既存データ対策）
+                    'candidates' => ['measurement', '測定', '測定変更', 'mesurement', 'Mesurement'],
+                ],
+                'environment' => [
+                    'candidates' => ['environment', '環境', '環境変更'],
+                ],
+                'other' => [
+                    'candidates' => ['other', 'その他', 'その他変更', 'other_change'],
+                ],
+                'uncategorized' => [
+                    'candidates' => ['uncategorized', '未分類', ''],
+                ],
             ];
 
             $pcnSummary = [];
-            foreach ($pcnCategoryDefs as $label => $_candidates) {
-                $pcnSummary[$label] = [
-                    'label'      => $label,
+            foreach ($pcnCategoryDefs as $key => $def) {
+                $pcnSummary[$key] = [
+                    'label'      => $key,   // 予備（基本はBladeで翻訳する）
                     'count'      => 0,
                     'max_months' => null,
                     'customer'   => null,
@@ -93,7 +116,8 @@ class CwebCaseController extends Controller
                         $catRaw  = trim((string)$pcn->category);
                         $months  = (int)($pcn->months_before ?? 0);
 
-                        foreach ($pcnCategoryDefs as $label => $candidates) {
+                        foreach ($pcnCategoryDefs as $label => $def) {
+                            $candidates = $def['candidates'] ?? [];
                             if (!in_array($catRaw, $candidates, true)) continue;
 
                             $pcnSummary[$label]['count']++;
@@ -269,17 +293,17 @@ class CwebCaseController extends Controller
         );
 
         $validator->after(function ($v) use ($request) {
-    $productMain = $request->input('product_main');
-    $productSub  = $request->input('product_sub');
+            $productMain = $request->input('product_main');
+            $productSub  = $request->input('product_sub');
 
-    // 「その他」以外のときだけ品番必須
-    if ($productMain !== 'その他' && !filled($productSub)) {
-        $v->errors()->add('product_sub', '対象製品（品番）を選択してください。');
-    }
+            // 「その他」以外のときだけ品番必須
+            if ($productMain !== 'その他' && !filled($productSub)) {
+                $v->errors()->add('product_sub', '対象製品（品番）を選択してください。');
+            }
 
-if ($productMain !== 'その他' && !filled($productSub)) {
-    $v->errors()->add('product_sub', '対象製品（品番）を選択してください。');
-}
+            if ($productMain !== 'その他' && !filled($productSub)) {
+                $v->errors()->add('product_sub', '対象製品（品番）を選択してください。');
+            }
 
             foreach ((array)$request->input('pcn_items', []) as $i => $row) {
                 $cat   = $row['category'] ?? null;
@@ -354,7 +378,10 @@ if ($productMain !== 'その他' && !filled($productSub)) {
         $salesUser = User::where('employee_number', $data['sales_employee_number'])->first();
         $nextManageNo = CwebCase::nextManagementNo();
 
-        DB::transaction(function () use ($currentUser, $data, $salesUser, $nextManageNo) {
+        // ★ 追加：作成した案件を外で使う（redirectをshowへ）
+        $createdCase = null;
+
+        DB::transaction(function () use ($currentUser, $data, $salesUser, $nextManageNo, &$createdCase) {
             $categories = (array)($data['categories'] ?? []);
 
             $case = CwebCase::create([
@@ -431,13 +458,26 @@ if ($productMain !== 'その他' && !filled($productSub)) {
                     'percentage'      => (int)($alloc['percentage'] ?? 0),
                 ]);
             }
+
+            // ★ 追加：transaction外へ返す
+            $createdCase = $case;
         });
 
-return redirect()
-    ->route('cweb.cases.index', ['locale' => $locale])
-    ->with('ok', '案件を登録しました。');
+        // ✅ 登録メール：品証マスタ + 営業窓口 + 情報共有者 + その他要求対応者 + 製品担当者（全員）
+        $createdCase->load(['sharedUsers.user','otherRequirements']);
+        $empNos = $this->getCaseRecipientEmpNos($createdCase);
+        $emails = $this->empNosToEmails($empNos);
 
+        $subject = "Registration_顧客要求の新規登録がありました / C-WEB /(".$createdCase->manage_no.")";
+        $caseUrl = route('cweb.cases.show', ['locale' => $locale, 'case' => $createdCase->id]);
+        $body    = $caseUrl . "\n" . "新規登録しました：" . ($currentUser->name ?? '-');
 
+        $mailto = $this->buildMailto($emails, $subject, $body);
+
+        return redirect()
+            ->route('cweb.cases.show', ['locale' => $locale, 'case' => $createdCase->id])
+            ->with('ok', '案件を登録しました。')
+            ->with('mailto_url', $mailto);
     }
 
     /**
@@ -488,6 +528,23 @@ return redirect()
             ? User::whereIn('employee_number', $otherNumbers)->get()->keyBy('employee_number')
             : collect();
 
+        // ✅ コメント投稿：品証マスタ + 営業窓口 + 情報共有者 + その他要求対応者 + 当該製品の担当者（候補を出して選択）
+        $candidateEmpNos = $this->getCaseRecipientEmpNos($case);
+
+        $candidateUsers = !empty($candidateEmpNos)
+            ? User::whereIn('employee_number', $candidateEmpNos)->get()->keyBy('employee_number')
+            : collect();
+
+        $mailRecipients = [];
+        foreach ($candidateEmpNos as $empNo) {
+            $u = $candidateUsers[$empNo] ?? null;
+            $mailRecipients[$empNo] = [
+                'employee_number' => $empNo,
+                'name'            => $u->name ?? '',
+                'checked'         => true, // デフォルトON
+            ];
+        }
+
         return view('cweb.cases.show', [
             'locale'              => $locale,
             'case'                => $case,
@@ -498,6 +555,7 @@ return redirect()
             'salesEmployeeName'   => $salesEmployeeName,
             'otherEmployees'      => $otherEmployees,
             'sharedUsers'         => $sharedUsers,
+            'mailRecipients'      => $mailRecipients,
         ]);
     }
 
@@ -516,138 +574,125 @@ return redirect()
     /**
      * 更新
      */
-public function update(Request $request, string $locale, CwebCase $case)
-{
-    // ▼ 更新前の値（DBにある元値）を控える
-    $original = $case->getOriginal();
+    public function update(Request $request, string $locale, CwebCase $case)
+    {
+        // （ここはあなたの既存のまま）
+        $original = $case->getOriginal();
 
-    // ▼ バリデーション
-    $data = $request->validate([
-        'sales_employee_number' => ['required', 'string'],
-        'customer_name'         => ['required', 'string', 'max:255'],
-        'categories'            => ['required', 'array'],
-        'product_main'          => ['required', 'string'],
-        'product_sub' => ['nullable', 'string', 'max:50'],
-        'cost_owner_code'       => ['required', 'string'],
-        'will_initial'          => ['nullable', 'integer', 'min:0'],
-        'will_monthly'          => ['nullable', 'integer', 'min:0'],
-        'related_qweb'          => ['nullable', 'string'],
-    ]);
-
-    // ===== 差分表示用の小道具 =====
-    $fmt = function ($v) {
-        if ($v === null) return '-';
-        if ($v === '') return '-';
-        return (string)$v;
-    };
-
-    $fmtWill = function ($v) {
-        if ($v === null || $v === '') return '-';
-        return number_format((int)$v) . ' will';
-    };
-
-    $catsLabel = function (bool $standard, bool $pcn, bool $other) {
-        $arr = [];
-        if ($standard) $arr[] = '標準管理';
-        if ($pcn)      $arr[] = 'PCN';
-        if ($other)    $arr[] = 'その他要求';
-        return $arr ? implode(' / ', $arr) : '-';
-    };
-
-    // ▼ 更新後の値をセット（まだ save しない）
-    $case->sales_contact_employee_number = $data['sales_employee_number'];
-    $case->customer_name                 = $data['customer_name'];
-    $case->product_group                 = $data['product_main'];
-    $case->product_code                  = $data['product_sub'];
-    $case->cost_responsible_code         = $data['cost_owner_code'];
-
-    $cats = $data['categories'] ?? [];
-    $case->category_standard = in_array('standard', $cats, true);
-    $case->category_pcn      = in_array('pcn',      $cats, true);
-    $case->category_other    = in_array('other',    $cats, true);
-
-    $case->will_registration_cost = $data['will_initial'] ?? null;
-    $case->will_monthly_cost      = $data['will_monthly'] ?? null;
-    $case->related_qweb           = $data['related_qweb'] ?? null;
-
-    // ===== ここから差分生成（save前に作るのがコツ） =====
-    // 旧/新で名前も出したい項目があるので、必要ユーザーをまとめて取得
-    $oldSalesEmpNo = (string)($original['sales_contact_employee_number'] ?? '');
-    $newSalesEmpNo = (string)($case->sales_contact_employee_number ?? '');
-
-    $salesUsers = User::whereIn('employee_number', array_values(array_filter([
-        $oldSalesEmpNo ?: null,
-        $newSalesEmpNo ?: null,
-    ])))->get()->keyBy('employee_number');
-
-    $oldSalesName = $oldSalesEmpNo ? optional($salesUsers[$oldSalesEmpNo] ?? null)->name : null;
-    $newSalesName = $newSalesEmpNo ? optional($salesUsers[$newSalesEmpNo] ?? null)->name : null;
-
-    $lines = [];
-    $add = function (string $label, $old, $new, $formatter = null) use (&$lines, $fmt) {
-        $f = $formatter ?: $fmt;
-        $o = $f($old);
-        $n = $f($new);
-        if ($o !== $n) {
-            $lines[] = "・{$label}：{$o} → {$n}";
-        }
-    };
-
-    // ▼ 差分（メイン項目）
-    $add('顧客名',      $original['customer_name'] ?? null, $case->customer_name);
-    $add('費用負担先',  $original['cost_responsible_code'] ?? null, $case->cost_responsible_code);
-    $add('対象製品（製品）', $original['product_group'] ?? null, $case->product_group);
-    $add('対象製品（品番）', $original['product_code'] ?? null, $case->product_code);
-
-    // 営業窓口は「社員番号 / 名前」まで表示
-    $oldSalesDisp = trim(($oldSalesEmpNo ?: '-') . ($oldSalesName ? " / {$oldSalesName}" : ''));
-    $newSalesDisp = trim(($newSalesEmpNo ?: '-') . ($newSalesName ? " / {$newSalesName}" : ''));
-    $add('営業窓口', $oldSalesDisp, $newSalesDisp);
-
-    // カテゴリー（bool3つ → 表示ラベル）
-    $oldCatLabel = $catsLabel(
-        (bool)($original['category_standard'] ?? false),
-        (bool)($original['category_pcn'] ?? false),
-        (bool)($original['category_other'] ?? false),
-    );
-    $newCatLabel = $catsLabel(
-        (bool)($case->category_standard ?? false),
-        (bool)($case->category_pcn ?? false),
-        (bool)($case->category_other ?? false),
-    );
-    $add('カテゴリー', $oldCatLabel, $newCatLabel);
-
-    // Will
-    $add('Will（登録費）', $original['will_registration_cost'] ?? null, $case->will_registration_cost, $fmtWill);
-    $add('Will（月額）',   $original['will_monthly_cost'] ?? null,      $case->will_monthly_cost,      $fmtWill);
-
-    // 関連Q-WEB
-    $add('関連Q-WEB', $original['related_qweb'] ?? null, $case->related_qweb);
-
-    // ===== 保存 =====
-    $case->save();
-
-    // ✅ 更新コメント（差分付き）
-    if (method_exists($case, 'comments')) {
-        $body = "【更新】\n";
-        $body .= $lines
-            ? implode("\n", $lines)
-            : "変更はありませんでした。";
-
-        $case->comments()->create([
-            'body'    => $body,
-            'user_id' => auth()->id(),
+        $data = $request->validate([
+            'sales_employee_number' => ['required', 'string'],
+            'customer_name'         => ['required', 'string', 'max:255'],
+            'categories'            => ['required', 'array'],
+            'product_main'          => ['required', 'string'],
+            'product_sub'           => ['nullable', 'string', 'max:50'],
+            'cost_owner_code'       => ['required', 'string'],
+            'will_initial'          => ['nullable', 'integer', 'min:0'],
+            'will_monthly'          => ['nullable', 'integer', 'min:0'],
+            'related_qweb'          => ['nullable', 'string'],
         ]);
-    }
 
-    return redirect()
-        ->route('cweb.cases.show', ['locale' => $locale, 'case' => $case->id])
-        ->with('ok', '案件を更新しました。');
-}
+        $fmt = function ($v) {
+            if ($v === null) return '-';
+            if ($v === '') return '-';
+            return (string)$v;
+        };
+
+        $fmtWill = function ($v) {
+            if ($v === null || $v === '') return '-';
+            return number_format((int)$v) . ' will';
+        };
+
+        $catsLabel = function (bool $standard, bool $pcn, bool $other) {
+            $arr = [];
+            if ($standard) $arr[] = '標準管理';
+            if ($pcn)      $arr[] = 'PCN';
+            if ($other)    $arr[] = 'その他要求';
+            return $arr ? implode(' / ', $arr) : '-';
+        };
+
+        $case->sales_contact_employee_number = $data['sales_employee_number'];
+        $case->customer_name                 = $data['customer_name'];
+        $case->product_group                 = $data['product_main'];
+        $case->product_code                  = $data['product_sub'];
+        $case->cost_responsible_code         = $data['cost_owner_code'];
+
+        $cats = $data['categories'] ?? [];
+        $case->category_standard = in_array('standard', $cats, true);
+        $case->category_pcn      = in_array('pcn',      $cats, true);
+        $case->category_other    = in_array('other',    $cats, true);
+
+        $case->will_registration_cost = $data['will_initial'] ?? null;
+        $case->will_monthly_cost      = $data['will_monthly'] ?? null;
+        $case->related_qweb           = $data['related_qweb'] ?? null;
+
+        $oldSalesEmpNo = (string)($original['sales_contact_employee_number'] ?? '');
+        $newSalesEmpNo = (string)($case->sales_contact_employee_number ?? '');
+
+        $salesUsers = User::whereIn('employee_number', array_values(array_filter([
+            $oldSalesEmpNo ?: null,
+            $newSalesEmpNo ?: null,
+        ])))->get()->keyBy('employee_number');
+
+        $oldSalesName = $oldSalesEmpNo ? optional($salesUsers[$oldSalesEmpNo] ?? null)->name : null;
+        $newSalesName = $newSalesEmpNo ? optional($salesUsers[$newSalesEmpNo] ?? null)->name : null;
+
+        $lines = [];
+        $add = function (string $label, $old, $new, $formatter = null) use (&$lines, $fmt) {
+            $f = $formatter ?: $fmt;
+            $o = $f($old);
+            $n = $f($new);
+            if ($o !== $n) {
+                $lines[] = "・{$label}：{$o} → {$n}";
+            }
+        };
+
+        $add('顧客名',      $original['customer_name'] ?? null, $case->customer_name);
+        $add('費用負担先',  $original['cost_responsible_code'] ?? null, $case->cost_responsible_code);
+        $add('対象製品（製品）', $original['product_group'] ?? null, $case->product_group);
+        $add('対象製品（品番）', $original['product_code'] ?? null, $case->product_code);
+
+        $oldSalesDisp = trim(($oldSalesEmpNo ?: '-') . ($oldSalesName ? " / {$oldSalesName}" : ''));
+        $newSalesDisp = trim(($newSalesEmpNo ?: '-') . ($newSalesName ? " / {$newSalesName}" : ''));
+        $add('営業窓口', $oldSalesDisp, $newSalesDisp);
+
+        $oldCatLabel = $catsLabel(
+            (bool)($original['category_standard'] ?? false),
+            (bool)($original['category_pcn'] ?? false),
+            (bool)($original['category_other'] ?? false),
+        );
+        $newCatLabel = $catsLabel(
+            (bool)($case->category_standard ?? false),
+            (bool)($case->category_pcn ?? false),
+            (bool)($case->category_other ?? false),
+        );
+        $add('カテゴリー', $oldCatLabel, $newCatLabel);
+
+        $add('Will（登録費）', $original['will_registration_cost'] ?? null, $case->will_registration_cost, $fmtWill);
+        $add('Will（月額）',   $original['will_monthly_cost'] ?? null,      $case->will_monthly_cost,      $fmtWill);
+
+        $add('関連Q-WEB', $original['related_qweb'] ?? null, $case->related_qweb);
+
+        $case->save();
+
+        if (method_exists($case, 'comments')) {
+            $body = "【更新】\n";
+            $body .= $lines
+                ? implode("\n", $lines)
+                : "変更はありませんでした。";
+
+            $case->comments()->create([
+                'body'    => $body,
+                'user_id' => auth()->id(),
+            ]);
+        }
+
+        return redirect()
+            ->route('cweb.cases.show', ['locale' => $locale, 'case' => $case->id])
+            ->with('ok', '案件を更新しました。');
+    }
 
     /**
      * 廃止：GET は画面を返さず、詳細へ戻す（B運用）
-     * （web.php に cases.abolish.form があるので、メソッドだけ用意）
      */
     public function abolishForm(string $locale, CwebCase $case)
     {
@@ -677,7 +722,6 @@ public function update(Request $request, string $locale, CwebCase $case)
             }
 
             $case->status = 'closed';
-            // もしカラムがあるならついでに入れる（無ければOK）
             if (\Schema::hasColumn('cweb_cases', 'abolished_by_user_id')) $case->abolished_by_user_id = auth()->id();
             if (\Schema::hasColumn('cweb_cases', 'abolished_comment'))   $case->abolished_comment   = $commentText;
             if (\Schema::hasColumn('cweb_cases', 'abolished_at'))        $case->abolished_at        = now();
@@ -685,14 +729,25 @@ public function update(Request $request, string $locale, CwebCase $case)
             $case->save();
         });
 
+        // ✅ 廃止メール：品証マスタ + 営業窓口 + 情報共有者 + その他要求対応者 + 製品担当者（全員）
+        $case->load(['sharedUsers.user','otherRequirements']);
+        $empNos = $this->getCaseRecipientEmpNos($case);
+        $emails = $this->empNosToEmails($empNos);
+
+        $subject = "Abolition_顧客要求が廃止されました / C-WEB /(".$case->manage_no.")";
+        $body    = "廃止されました：" . (auth()->user()->name ?? '-') . "\n"
+                 . "コメント:" . ($validated['abolish_comment'] ?? '');
+
+        $mailto = $this->buildMailto($emails, $subject, $body);
+
         return redirect()
             ->route('cweb.cases.show', ['locale' => $locale, 'case' => $case->id])
-            ->with('ok', '案件を廃止しました。');
+            ->with('ok', '案件を廃止しました。')
+            ->with('mailto_url', $mailto);
     }
 
     /**
      * products.summary が route にあるので、無いと 404 になる。
-     * 使ってないなら route 側を消してOK。
      */
     public function productSummary(Request $request, string $locale)
     {
@@ -700,5 +755,83 @@ public function update(Request $request, string $locale, CwebCase $case)
             'locale' => $locale,
             'tab'    => 'product',
         ]);
+    }
+
+    private function getCaseRecipientEmpNos(CwebCase $case): array
+    {
+        // 品証マスタ
+        $qualityEmpNos = CwebQualityMaster::query()
+            ->where('is_active', true)
+            ->pluck('employee_number')
+            ->all();
+
+        // 営業窓口
+        $salesEmpNo = $case->sales_contact_employee_number ?? null;
+
+        // 情報共有者（role=shared）
+        $sharedEmpNos = collect($case->sharedUsers ?? [])
+            ->filter(fn($row) => ($row->role ?? null) === 'shared')
+            ->map(fn($row) => optional($row->user)->employee_number)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        // その他要求対応者
+        $otherEmpNos = collect($case->otherRequirements ?? [])
+            ->pluck('responsible_employee_number')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        // 製品担当者（product_group + product_code でDBから）
+        $productEmpNos = [];
+        $pg = $case->product_group ?? null;
+        $pc = $case->product_code ?? null;
+        if ($pg && $pc) {
+            $productEmpNos = CwebProductOwner::query()
+                ->where('is_active', true)
+                ->where('product_group', $pg)
+                ->where('product_code', $pc)
+                ->pluck('employee_number')
+                ->unique()
+                ->values()
+                ->all();
+        }
+
+        return collect([])
+            ->merge($qualityEmpNos)
+            ->push($salesEmpNo)
+            ->merge($sharedEmpNos)
+            ->merge($otherEmpNos)
+            ->merge($productEmpNos)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function empNosToEmails(array $empNos): array
+    {
+        if (empty($empNos)) return [];
+
+        return User::query()
+            ->whereIn('employee_number', $empNos)
+            ->whereNotNull('email')
+            ->where('email', '<>', '')
+            ->pluck('email')
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function buildMailto(array $emails, string $subject, string $body): string
+    {
+        $to = implode(',', $emails);
+
+        return 'mailto:' . $to
+            . '?subject=' . rawurlencode($subject)
+            . '&body=' . rawurlencode($body);
     }
 }

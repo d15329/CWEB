@@ -505,7 +505,7 @@ form{ margin-top:0; padding-bottom: 0; }
                     <select name="pcn_items[{{ $i }}][category]"
                             style="padding:4px 6px;border-radius:4px;border:1px solid #9ca3af;">
                         <option value="">選択</option>
-                        <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>仕様書内容</option>
+                        <option value="spec"        {{ ($item['category'] ?? '') === 'spec' ? 'selected' : '' }}>{{ __('cweb.pcn.categories.spec') }}</option>
                         <option value="man"         {{ ($item['category'] ?? '') === 'man' ? 'selected' : '' }}>人（Man）</option>
                         <option value="machine"     {{ ($item['category'] ?? '') === 'machine' ? 'selected' : '' }}>機械（Machine）</option>
                         <option value="material"    {{ ($item['category'] ?? '') === 'material' ? 'selected' : '' }}>材料（Material）</option>

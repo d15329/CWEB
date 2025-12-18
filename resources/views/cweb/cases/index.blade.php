@@ -8,7 +8,17 @@
 
     // 現在のクエリ（tab/keyword/filter等）を維持して locale だけ切り替える
     $switchLocaleParams = array_merge(request()->query(), ['locale' => $nextLocale]);
+
+    // ✅ 追加：localeでリンク先を切替（例：public/docs 配下）
+  $categoryGuideUrl = $currentLocale === 'ja'
+      ? asset('images/category_guide_ja_C.png')
+      : asset('images/category_guide_en_C.png'); 
+
+    $managementFeeUrl = $currentLocale === 'ja'
+        ? asset('docs/management_fee_ja.pdf')   // ← 日本語版
+        : asset('docs/management_fee_en.pdf');  // ← 英語版
 @endphp
+
 
 <header class="cweb-header">
     <div class="cweb-header-inner">
@@ -43,7 +53,11 @@
 {{-- ✅ header内のscriptは「JSだけ」 --}}
 <script>
 function openCategoryImage() {
-    const url = "{{ asset('images/images_C.png') }}";
+  window.open(@json($categoryGuideUrl), '_blank');
+}
+
+function openManagementFeeDoc() {
+    const url = @json($managementFeeUrl);
     window.open(url, '_blank');
 }
 
@@ -76,6 +90,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+
 @endsection
 
 

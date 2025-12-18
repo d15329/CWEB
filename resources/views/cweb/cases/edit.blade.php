@@ -42,9 +42,6 @@
         <button type="button" class="cweb-header-user-toggle">
           {{ auth()->user()->name }}
         </button>
-        {{-- debug --}}
-<div style="font-size:12px;color:#fca5a5;">{{ $switchUrl }}</div>
-
       @endauth
     </div>
   </div>

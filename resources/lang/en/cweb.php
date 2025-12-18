@@ -149,4 +149,34 @@ return [
     'title_other'   => 'Select a person in charge (double-click to add/remove)',
     'title_will'    => 'Select allocation owner (double-click to add/remove)',
   ],
+    'product' => [
+    'select_group' => 'Select product',
+    'all_in_group' => '(All)',
+
+    'help_select_to_show' => 'Select a product to view contract counts and PCN targets.',
+    'coming_soon' => 'Coming soon',
+
+    'cards' => [
+      'contract_count' => 'Contract count',
+      'other_requests' => 'Other requests',
+      'pcn_targets'    => 'PCN targets',
+    ],
+
+    'contract_breakdown' => [
+      'standard' => 'Standard',
+      'pcn'      => 'PCN',
+      'other'    => 'Other requests',
+      'suffix'   => '', // 例: "3" の後ろに何も付けない
+    ],
+
+    'pcn' => [
+      'max_notice' => 'Max notice',
+      'customer'   => 'Customer',
+      'manage_no'  => 'Management No.',
+      'notice'     => 'Notice',
+      'months_suffix' => ' months before',
+      'no_cases'   => 'No matching cases.',
+    ],
+  ],
+
 ];

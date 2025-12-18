@@ -151,4 +151,34 @@ return [
     'title_other'   => 'その他要求の対応者を選択（ダブルクリックで追加/削除）',
     'title_will'    => '月額管理費の分配担当者を選択（ダブルクリックで追加/削除）',
   ],
+    'product' => [
+    'select_group' => '製品選択',
+    'all_in_group' => '（すべて）',
+
+    'help_select_to_show' => '製品を選択すると、契約登録数および PCN 管理対象の情報が表示されます',
+    'coming_soon' => 'Coming soon',
+
+    'cards' => [
+      'contract_count' => '契約登録数',
+      'other_requests' => 'その他要求',
+      'pcn_targets'    => 'PCN管理対象',
+    ],
+
+    'contract_breakdown' => [
+      'standard' => '標準管理',
+      'pcn'      => 'PCN',
+      'other'    => 'その他要求',
+      'suffix'   => '件',
+    ],
+
+    'pcn' => [
+      'max_notice' => '最長通知期間',
+      'customer'   => '顧客',
+      'manage_no'  => '管理番号',
+      'notice'     => '通知期間',
+      'months_suffix' => 'か月前',
+      'no_cases'   => '該当案件はありません。',
+    ],
+  ],
+
 ];
